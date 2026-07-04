@@ -1,9 +1,10 @@
+
 <!DOCTYPE html>
 <html lang="en">
 <head>
 <meta charset="UTF-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-<title>Inbound — SignalWire Lead Console</title>
+<title>Inbound: SignalWire Lead Console</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;600;700&family=Inter:wght@400;500;600&display=swap" rel="stylesheet">
 <style>
@@ -236,6 +237,89 @@
     font-size: 13px;
   }
 
+  /* ---------- view tabs ---------- */
+  .view-tabs {
+    display: flex;
+    gap: 4px;
+    padding: 10px 20px 0;
+    border-bottom: 1px solid var(--border);
+    background: var(--panel);
+  }
+  .view-tab {
+    font-family: var(--mono);
+    font-size: 12px;
+    font-weight: 600;
+    background: transparent;
+    border: 1px solid transparent;
+    border-bottom: none;
+    color: var(--text-muted);
+    padding: 8px 14px;
+    border-radius: 6px 6px 0 0;
+    cursor: pointer;
+  }
+  .view-tab:hover { color: var(--text); }
+  .view-tab.active {
+    color: var(--accent);
+    background: var(--bg);
+    border-color: var(--border);
+  }
+
+  /* ---------- analytics dashboard ---------- */
+  .dash-wrap { flex: 1; overflow-y: auto; padding: 20px; }
+  .kpi-grid {
+    display: grid;
+    grid-template-columns: repeat(4, 1fr);
+    gap: 12px;
+    margin-bottom: 20px;
+  }
+  .kpi-card {
+    background: var(--panel);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 16px;
+  }
+  .kpi-card .label {
+    font-family: var(--mono);
+    font-size: 11px;
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+    color: var(--text-muted);
+    margin-bottom: 8px;
+  }
+  .kpi-card .value {
+    font-family: var(--mono);
+    font-size: 26px;
+    font-weight: 700;
+    color: var(--text);
+  }
+  .kpi-card .value.accent { color: var(--accent); }
+  .kpi-card .sub { font-size: 11px; color: var(--text-dim); margin-top: 6px; font-family: var(--mono); }
+
+  .chart-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 12px;
+  }
+  .chart-card {
+    background: var(--panel);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 16px;
+    margin-bottom: 12px;
+  }
+  .chart-card.full { grid-column: 1 / -1; }
+  .chart-card h4 {
+    font-family: var(--mono);
+    font-size: 11px;
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+    color: var(--text-muted);
+    margin: 0 0 4px;
+  }
+  .chart-card .chart-note { font-size: 11px; color: var(--text-dim); margin-bottom: 12px; font-family: var(--mono); }
+  .chart-card svg text { font-family: var(--mono); fill: var(--text-dim); }
+  .bar-tip { cursor: default; }
+
   /* ---------- connect gate ---------- */
   .connect-gate {
     max-width: 420px;
@@ -312,7 +396,9 @@ const state = {
   filterText: '',
   statusFilters: new Set(['new','contacted','qualified','dead']),
   activePhone: null,
-  fromNumber: null
+  fromNumber: null,
+  view: 'inbox',
+  analytics: null
 };
 
 const app = document.getElementById('app');
@@ -345,11 +431,11 @@ function renderConnectGate(errorMsg) {
   app.innerHTML = `
     <div class="connect-gate">
       <h2>Connect to SignalWire</h2>
-      <p>Enter your Space, Project ID, and Auth Token. These stay in server memory for this session only — never written to disk or sent anywhere but SignalWire's API.</p>
+      <p>Enter your Space, Project ID, and Auth Token. These stay in server memory for this session only, never written to disk or sent anywhere but SignalWire's API.</p>
       <div class="field"><label>SPACE (e.g. cruz-associates-llc)</label><input type="text" id="inSpace" placeholder="yourspace" /></div>
       <div class="field"><label>PROJECT ID</label><input type="text" id="inProject" placeholder="00000000-0000-0000-0000-000000000000" /></div>
       <div class="field"><label>AUTH TOKEN</label><input type="password" id="inToken" placeholder="••••••••••••••••" /></div>
-      <div class="field"><label>FROM NUMBER (optional — needed to send replies)</label><input type="text" id="inFrom" placeholder="+15555550123" /></div>
+      <div class="field"><label>FROM NUMBER (optional, needed to send replies)</label><input type="text" id="inFrom" placeholder="+15555550123" /></div>
       <button class="btn primary" id="connectBtn">Connect</button>
       ${errorMsg ? `<div class="error-msg">${errorMsg}</div>` : ''}
     </div>
@@ -376,22 +462,32 @@ function renderConnectGate(errorMsg) {
 
 function renderCrmShell() {
   app.innerHTML = `
-    <div class="layout">
+    <div class="view-tabs">
+      <button class="view-tab ${state.view === 'inbox' ? 'active' : ''}" id="tabInbox">Inbox</button>
+      <button class="view-tab ${state.view === 'analytics' ? 'active' : ''}" id="tabAnalytics">Analytics</button>
+    </div>
+    <div class="layout" id="viewInbox" style="display:${state.view === 'inbox' ? 'grid' : 'none'};">
       <div class="sidebar">
         <h4>Filter by status</h4>
         <div class="status-filter" id="statusFilters"></div>
         <h4>Markets</h4>
-        <div id="marketList" style="color:var(--text-dim); font-size:12px; font-family:var(--mono);">— derived from tags —</div>
+        <div id="marketList" style="color:var(--text-dim); font-size:12px; font-family:var(--mono);">(derived from tags)</div>
       </div>
       <div class="main">
         <div class="toolbar">
           <input type="text" id="searchBox" placeholder="Search phone number or message text..." />
           <button class="btn primary small" id="newMsgBtn">+ New message</button>
         </div>
-        <div class="table-wrap" id="tableWrap"><div class="loading">Loading inbound messages…</div></div>
+        <div class="table-wrap" id="tableWrap"><div class="loading">Loading inbound messages...</div></div>
       </div>
     </div>
+    <div class="dash-wrap" id="viewAnalytics" style="display:${state.view === 'analytics' ? 'block' : 'none'};">
+      <div class="loading">Loading analytics...</div>
+    </div>
   `;
+
+  document.getElementById('tabInbox').addEventListener('click', () => switchView('inbox'));
+  document.getElementById('tabAnalytics').addEventListener('click', () => switchView('analytics'));
 
   const statusEl = document.getElementById('statusFilters');
   ['new','contacted','qualified','dead'].forEach(s => {
@@ -419,7 +515,7 @@ function badgeClass(status) { return `badge ${status}`; }
 
 function fmtTime(iso) {
   const d = new Date(iso);
-  if (isNaN(d)) return iso || '—';
+  if (isNaN(d)) return iso || 'N/A';
   return d.toLocaleString(undefined, { month:'short', day:'numeric', hour:'2-digit', minute:'2-digit' });
 }
 
@@ -444,8 +540,8 @@ function renderTable() {
   const rows = filtered.map(m => `
     <tr data-phone="${m.from}" data-sid="${m.sid}">
       <td class="time">${fmtTime(m.dateSent)}</td>
-      <td class="from">${m.from || '—'}</td>
-      <td class="body"><div>${m.market ? `<span style="color:var(--text-dim); font-family:var(--mono); font-size:11px;">${m.market} — </span>` : ''}</div><div class="preview">${(m.body || '').replace(/</g,'&lt;')}</div></td>
+      <td class="from">${m.from || 'N/A'}</td>
+      <td class="body"><div>${m.market ? `<span style="color:var(--text-dim); font-family:var(--mono); font-size:11px;">${m.market}: </span>` : ''}</div><div class="preview">${(m.body || '').replace(/</g,'&lt;')}</div></td>
       <td><span class="${badgeClass(m.status)}">${m.status}</span></td>
     </tr>
   `).join('');
@@ -479,6 +575,178 @@ async function loadMessages() {
   }
 }
 
+function switchView(view) {
+  state.view = view;
+  const inboxEl = document.getElementById('viewInbox');
+  const analyticsEl = document.getElementById('viewAnalytics');
+  const tabInbox = document.getElementById('tabInbox');
+  const tabAnalytics = document.getElementById('tabAnalytics');
+  if (!inboxEl || !analyticsEl) return;
+  inboxEl.style.display = view === 'inbox' ? 'grid' : 'none';
+  analyticsEl.style.display = view === 'analytics' ? 'block' : 'none';
+  tabInbox.classList.toggle('active', view === 'inbox');
+  tabAnalytics.classList.toggle('active', view === 'analytics');
+  if (view === 'analytics') loadAnalytics();
+}
+
+async function loadAnalytics() {
+  const wrap = document.getElementById('viewAnalytics');
+  if (!wrap) return;
+  wrap.innerHTML = `<div class="loading">Pulling reply data from SignalWire...</div>`;
+  try {
+    const r = await fetch('/api/analytics');
+    const j = await r.json();
+    if (!r.ok) {
+      wrap.innerHTML = `<div class="empty">${j.error || 'Failed to load analytics.'}</div>`;
+      return;
+    }
+    state.analytics = j;
+    renderAnalytics(j);
+  } catch (e) {
+    wrap.innerHTML = `<div class="empty">Network error reaching the server: ${e.message}</div>`;
+  }
+}
+
+function fmtDuration(seconds) {
+  if (seconds === null || seconds === undefined) return 'N/A';
+  if (seconds < 60) return `${Math.round(seconds)}s`;
+  if (seconds < 3600) return `${Math.round(seconds / 60)}m`;
+  if (seconds < 86400) return `${(seconds / 3600).toFixed(1)}h`;
+  return `${(seconds / 86400).toFixed(1)}d`;
+}
+
+function fmtHour(h) {
+  const period = h < 12 ? 'AM' : 'PM';
+  let display = h % 12;
+  if (display === 0) display = 12;
+  return `${display}${period}`;
+}
+
+function renderHourlyChart(hourly, bestHour) {
+  const w = 700, h = 200, padL = 30, padB = 24, padT = 10, padR = 10;
+  const plotW = w - padL - padR, plotH = h - padT - padB;
+  const maxRate = Math.max(10, ...hourly.map(d => d.rate));
+  const barW = plotW / hourly.length;
+
+  const bars = hourly.map((d, i) => {
+    const barH = (d.rate / maxRate) * plotH;
+    const x = padL + i * barW;
+    const y = padT + plotH - barH;
+    const isBest = bestHour && d.hour === bestHour.hour && d.inbound > 0;
+    const color = isBest ? 'var(--amber)' : 'var(--accent)';
+    const label = i % 3 === 0 ? `<text x="${x + barW / 2}" y="${h - 6}" font-size="9" text-anchor="middle">${fmtHour(d.hour)}</text>` : '';
+    return `
+      <rect class="bar-tip" x="${x + 1.5}" y="${y}" width="${Math.max(barW - 3, 1)}" height="${Math.max(barH, 0)}" fill="${color}" opacity="${d.inbound ? 1 : 0.25}" rx="2">
+        <title>${fmtHour(d.hour)}: ${d.rate}% response rate (${d.responded}/${d.inbound} replied)</title>
+      </rect>
+      ${label}
+    `;
+  }).join('');
+
+  return `<svg viewBox="0 0 ${w} ${h}" width="100%" height="${h}">${bars}</svg>`;
+}
+
+function renderBucketChart(buckets) {
+  const w = 700, rowH = 30, gap = 10, padL = 120, padR = 60;
+  const h = buckets.length * (rowH + gap);
+  const max = Math.max(1, ...buckets.map(b => b.count));
+  const plotW = w - padL - padR;
+
+  const rows = buckets.map((b, i) => {
+    const y = i * (rowH + gap);
+    const barW = (b.count / max) * plotW;
+    const color = b.label === 'No reply yet' ? 'var(--text-dim)' : 'var(--blue)';
+    return `
+      <text x="${padL - 10}" y="${y + rowH / 2 + 4}" font-size="11" text-anchor="end">${b.label}</text>
+      <rect x="${padL}" y="${y}" width="${Math.max(barW, 1)}" height="${rowH}" fill="${color}" rx="4">
+        <title>${b.label}: ${b.count}</title>
+      </rect>
+      <text x="${padL + barW + 8}" y="${y + rowH / 2 + 4}" font-size="11" fill="var(--text)">${b.count}</text>
+    `;
+  }).join('');
+
+  return `<svg viewBox="0 0 ${w} ${h}" width="100%" height="${h}">${rows}</svg>`;
+}
+
+function renderDailyChart(daily) {
+  const w = 700, h = 200, padL = 30, padB = 24, padT = 10, padR = 10;
+  const plotW = w - padL - padR, plotH = h - padT - padB;
+  if (daily.length === 0) return `<svg viewBox="0 0 ${w} ${h}" width="100%" height="${h}"></svg>`;
+  const max = Math.max(1, ...daily.map(d => Math.max(d.inbound, d.outbound)));
+  const barW = plotW / daily.length;
+  const step = Math.max(1, Math.ceil(daily.length / 10));
+
+  const bars = daily.map((d, i) => {
+    const x = padL + i * barW;
+    const inH = (d.inbound / max) * plotH;
+    const outH = (d.outbound / max) * plotH;
+    const label = i % step === 0 ? `<text x="${x + barW / 2}" y="${h - 6}" font-size="9" text-anchor="middle">${d.date.slice(5)}</text>` : '';
+    return `
+      <rect x="${x + 1}" y="${padT + plotH - inH}" width="${Math.max(barW / 2 - 2, 1)}" height="${inH}" fill="var(--accent)" rx="1">
+        <title>${d.date}: ${d.inbound} inbound</title>
+      </rect>
+      <rect x="${x + barW / 2 + 1}" y="${padT + plotH - outH}" width="${Math.max(barW / 2 - 2, 1)}" height="${outH}" fill="var(--blue)" rx="1">
+        <title>${d.date}: ${d.outbound} replies sent</title>
+      </rect>
+      ${label}
+    `;
+  }).join('');
+
+  return `<svg viewBox="0 0 ${w} ${h}" width="100%" height="${h}">${bars}</svg>`;
+}
+
+function renderAnalytics(a) {
+  const wrap = document.getElementById('viewAnalytics');
+  if (!wrap) return;
+
+  if (!a.totalInbound) {
+    wrap.innerHTML = `<div class="empty">No inbound messages yet to build analytics from.</div>`;
+    return;
+  }
+
+  wrap.innerHTML = `
+    <div class="kpi-grid">
+      <div class="kpi-card">
+        <div class="label">Total inbound</div>
+        <div class="value">${a.totalInbound}</div>
+        <div class="sub">${a.totalOutbound} replies sent</div>
+      </div>
+      <div class="kpi-card">
+        <div class="label">Response rate</div>
+        <div class="value accent">${a.responseRate}%</div>
+        <div class="sub">${a.respondedCount} of ${a.totalInbound} leads replied to</div>
+      </div>
+      <div class="kpi-card">
+        <div class="label">Avg response time</div>
+        <div class="value">${fmtDuration(a.avgResponseSeconds)}</div>
+        <div class="sub">median ${fmtDuration(a.medianResponseSeconds)}</div>
+      </div>
+      <div class="kpi-card">
+        <div class="label">Best time to text</div>
+        <div class="value accent">${a.bestHour ? fmtHour(a.bestHour.hour) : 'N/A'}</div>
+        <div class="sub">${a.bestHour ? `${a.bestHour.rate}% response rate` : 'not enough data yet'}</div>
+      </div>
+    </div>
+    <div class="chart-card">
+      <h4>Response rate by hour of day</h4>
+      <div class="chart-note">UTC hour. Amber bar marks the highest-converting hour.</div>
+      ${renderHourlyChart(a.hourly, a.bestHour)}
+    </div>
+    <div class="chart-grid">
+      <div class="chart-card">
+        <h4>Response time distribution</h4>
+        <div class="chart-note">How long it took to get a reply out, across all inbound messages.</div>
+        ${renderBucketChart(a.responseBuckets)}
+      </div>
+      <div class="chart-card">
+        <h4>Daily volume</h4>
+        <div class="chart-note">Inbound (green) vs replies sent (blue), last 30 days.</div>
+        ${renderDailyChart(a.dailyVolume)}
+      </div>
+    </div>
+  `;
+}
+
 async function openDrawer(phone) {
   state.activePhone = phone;
   const msgsForPhone = state.messages.filter(m => m.from === phone);
@@ -507,10 +775,15 @@ async function openDrawer(phone) {
 
     <div style="margin-top:24px; padding-top:20px; border-top:1px solid var(--border);">
       <div class="field">
-        <label>Reply to ${phone}${state.fromNumber ? '' : ' — set a From Number on the connect screen first'}</label>
-        <textarea id="replyBody" placeholder="Type a reply..." ${state.fromNumber ? '' : 'disabled'}></textarea>
+        <label>Reply to ${phone}</label>
+        <textarea id="replyBody" placeholder="Type a reply..."></textarea>
       </div>
-      <button class="btn" id="sendReplyBtn" style="width:100%;" ${state.fromNumber ? '' : 'disabled'}>Send</button>
+      ${state.fromNumber ? '' : `
+      <div class="field">
+        <label>From number (none set globally, enter one to send)</label>
+        <input type="text" id="replyFrom" placeholder="+15555550123" />
+      </div>`}
+      <button class="btn" id="sendReplyBtn" style="width:100%;">Send</button>
       <div id="sendStatus" style="font-family:var(--mono); font-size:12px; margin-top:8px;"></div>
     </div>
   `;
@@ -532,14 +805,25 @@ async function openDrawer(phone) {
   if (sendBtn) {
     sendBtn.onclick = async () => {
       const body = document.getElementById('replyBody').value.trim();
+      const fromEl = document.getElementById('replyFrom');
+      const from = fromEl ? fromEl.value.trim() : state.fromNumber;
       const statusEl = document.getElementById('sendStatus');
-      if (!body) return;
+      if (!body) {
+        statusEl.style.color = 'var(--red)';
+        statusEl.textContent = 'Type a message first.';
+        return;
+      }
+      if (!from) {
+        statusEl.style.color = 'var(--red)';
+        statusEl.textContent = 'Enter a From number to send.';
+        return;
+      }
       sendBtn.disabled = true;
       statusEl.style.color = 'var(--text-muted)';
-      statusEl.textContent = 'Sending…';
+      statusEl.textContent = 'Sending...';
       const r = await fetch('/api/send', {
         method: 'POST', headers: {'Content-Type':'application/json'},
-        body: JSON.stringify({ to: phone, body })
+        body: JSON.stringify({ to: phone, body, from })
       });
       const j = await r.json();
       sendBtn.disabled = false;
@@ -561,16 +845,21 @@ async function openDrawer(phone) {
 function openComposeDrawer() {
   drawerContent.innerHTML = `
     <h3>New message</h3>
-    <div class="sub">${state.fromNumber ? `Sending from ${state.fromNumber}` : 'Set a From Number on the connect screen first'}</div>
+    <div class="sub">${state.fromNumber ? `Sending from ${state.fromNumber}` : 'No From Number set globally, enter one below'}</div>
     <div class="field">
       <label>To</label>
-      <input type="text" id="composeTo" placeholder="+15555550123" ${state.fromNumber ? '' : 'disabled'} />
+      <input type="text" id="composeTo" placeholder="+15555550123" />
     </div>
     <div class="field">
       <label>Message</label>
-      <textarea id="composeBody" placeholder="Type a message..." ${state.fromNumber ? '' : 'disabled'}></textarea>
+      <textarea id="composeBody" placeholder="Type a message..."></textarea>
     </div>
-    <button class="btn primary" id="composeSendBtn" style="width:100%;" ${state.fromNumber ? '' : 'disabled'}>Send</button>
+    ${state.fromNumber ? '' : `
+    <div class="field">
+      <label>From number</label>
+      <input type="text" id="composeFrom" placeholder="+15555550123" />
+    </div>`}
+    <button class="btn primary" id="composeSendBtn" style="width:100%;">Send</button>
     <div id="composeStatus" style="font-family:var(--mono); font-size:12px; margin-top:8px;"></div>
   `;
 
@@ -579,18 +868,25 @@ function openComposeDrawer() {
     sendBtn.onclick = async () => {
       const to = document.getElementById('composeTo').value.trim();
       const body = document.getElementById('composeBody').value.trim();
+      const fromEl = document.getElementById('composeFrom');
+      const from = fromEl ? fromEl.value.trim() : state.fromNumber;
       const statusEl = document.getElementById('composeStatus');
       if (!to || !body) {
         statusEl.style.color = 'var(--red)';
         statusEl.textContent = 'Both To and Message are required.';
         return;
       }
+      if (!from) {
+        statusEl.style.color = 'var(--red)';
+        statusEl.textContent = 'Enter a From number to send.';
+        return;
+      }
       sendBtn.disabled = true;
       statusEl.style.color = 'var(--text-muted)';
-      statusEl.textContent = 'Sending…';
+      statusEl.textContent = 'Sending...';
       const r = await fetch('/api/send', {
         method: 'POST', headers: {'Content-Type':'application/json'},
-        body: JSON.stringify({ to, body })
+        body: JSON.stringify({ to, body, from })
       });
       const j = await r.json();
       sendBtn.disabled = false;
@@ -621,7 +917,9 @@ disconnectBtn.addEventListener('click', async () => {
   setConnected(false);
   render();
 });
-refreshBtn.addEventListener('click', loadMessages);
+refreshBtn.addEventListener('click', () => {
+  if (state.view === 'analytics') loadAnalytics(); else loadMessages();
+});
 
 function render() {
   if (!state.connected) {
