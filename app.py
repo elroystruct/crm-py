@@ -1,6 +1,9 @@
 import os
 import base64
 import json
+import bisect
+import datetime as dt
+from email.utils import parsedate_to_datetime
 from flask import Flask, request, jsonify, send_from_directory
 import requests
 from dotenv import load_dotenv
@@ -71,53 +74,83 @@ def disconnect():
     return jsonify({"connected": False})
 
 
+# ---------- shared message pull ----------
+def _fetch_all_messages(max_pages=20, page_size=100):
+    """Pulls the full paginated message log from SignalWire.
+
+    Returns (messages, None) on success, or (None, (json_body, status_code)) on failure,
+    so callers can `return err` directly from a Flask route.
+    """
+    all_messages = []
+    next_url = f"{base_url()}/Messages.json?PageSize={page_size}"
+    pages_fetched = 0
+
+    while next_url and pages_fetched < max_pages:
+        try:
+            r = requests.get(next_url, headers=auth_header(), timeout=20)
+        except requests.RequestException as e:
+            return None, (jsonify({"error": f"Could not reach SignalWire: {e}"}), 502)
+
+        if not r.ok:
+            return None, (jsonify({
+                "error": f"SignalWire API error ({r.status_code}) calling {next_url}: {r.text[:400]}"
+            }), r.status_code)
+
+        try:
+            payload = r.json()
+        except ValueError:
+            # Response was 2xx but not JSON, surface exactly what came back so it's debuggable,
+            # instead of a bare "Expecting value" parser error.
+            return None, (jsonify({
+                "error": (
+                    f"SignalWire returned a non-JSON response (status {r.status_code}) for {next_url}. "
+                    f"This usually means the Space name or Project ID is malformed. "
+                    f"Raw response start: {r.text[:200]!r}"
+                )
+            }), 502)
+
+        all_messages.extend(payload.get("messages", []))
+        pages_fetched += 1
+
+        next_page_uri = payload.get("next_page_uri")
+        if next_page_uri:
+            host = base_url().split("/api/laml/2010-04-01/Accounts/")[0]
+            next_url = f"{host}{next_page_uri}"
+        else:
+            next_url = None
+
+    return all_messages, None
+
+
+def _parse_ts(raw):
+    """Parses SignalWire's RFC2822-style date_sent/date_created strings into aware UTC datetimes."""
+    if not raw:
+        return None
+    try:
+        d = parsedate_to_datetime(raw)
+        if d.tzinfo is None:
+            d = d.replace(tzinfo=dt.timezone.utc)
+        return d.astimezone(dt.timezone.utc)
+    except Exception:
+        try:
+            d = dt.datetime.fromisoformat(raw.replace("Z", "+00:00"))
+            if d.tzinfo is None:
+                d = d.replace(tzinfo=dt.timezone.utc)
+            return d.astimezone(dt.timezone.utc)
+        except Exception:
+            return None
+
+
 # ---------- messages ----------
 @app.route("/api/messages")
 def messages():
     if not creds_ready():
         return jsonify({"error": "Not connected. Set your SignalWire Space, Project ID, and Auth Token first."}), 400
 
-    max_pages = 20
-    page_size = 100
-    all_messages = []
-
     try:
-        next_url = f"{base_url()}/Messages.json?PageSize={page_size}"
-        pages_fetched = 0
-
-        while next_url and pages_fetched < max_pages:
-            try:
-                r = requests.get(next_url, headers=auth_header(), timeout=20)
-            except requests.RequestException as e:
-                return jsonify({"error": f"Could not reach SignalWire: {e}"}), 502
-
-            if not r.ok:
-                return jsonify({
-                    "error": f"SignalWire API error ({r.status_code}) calling {next_url}: {r.text[:400]}"
-                }), r.status_code
-
-            try:
-                payload = r.json()
-            except ValueError:
-                # Response was 2xx but not JSON — surface exactly what came back so it's debuggable,
-                # instead of a bare "Expecting value" parser error.
-                return jsonify({
-                    "error": (
-                        f"SignalWire returned a non-JSON response (status {r.status_code}) for {next_url}. "
-                        f"This usually means the Space name or Project ID is malformed. "
-                        f"Raw response start: {r.text[:200]!r}"
-                    )
-                }), 502
-
-            all_messages.extend(payload.get("messages", []))
-            pages_fetched += 1
-
-            next_page_uri = payload.get("next_page_uri")
-            if next_page_uri:
-                host = base_url().split("/api/laml/2010-04-01/Accounts/")[0]
-                next_url = f"{host}{next_page_uri}"
-            else:
-                next_url = None
+        all_messages, err = _fetch_all_messages()
+        if err:
+            return err
     except Exception as e:
         return jsonify({"error": f"Unexpected error pulling SignalWire log: {e}"}), 500
 
@@ -142,6 +175,127 @@ def messages():
 
     enriched.sort(key=lambda m: m["dateSent"] or "", reverse=True)
     return jsonify({"count": len(enriched), "messages": enriched})
+
+
+# ---------- analytics ----------
+@app.route("/api/analytics")
+def analytics():
+    if not creds_ready():
+        return jsonify({"error": "Not connected. Set your SignalWire Space, Project ID, and Auth Token first."}), 400
+
+    try:
+        all_messages, err = _fetch_all_messages()
+        if err:
+            return err
+    except Exception as e:
+        return jsonify({"error": f"Unexpected error pulling SignalWire log: {e}"}), 500
+
+    inbound = []
+    outbound = []
+    for m in all_messages:
+        ts = _parse_ts(m.get("date_sent") or m.get("date_created"))
+        if ts is None:
+            continue
+        direction = m.get("direction") or ""
+        if direction.startswith("inbound"):
+            inbound.append({"phone": m.get("from"), "ts": ts})
+        else:
+            outbound.append({"phone": m.get("to"), "ts": ts})
+
+    outbound_by_phone = {}
+    for o in outbound:
+        outbound_by_phone.setdefault(o["phone"], []).append(o["ts"])
+    for k in outbound_by_phone:
+        outbound_by_phone[k].sort()
+
+    inbound_by_phone = {}
+    for i in inbound:
+        inbound_by_phone.setdefault(i["phone"], []).append(i["ts"])
+    for k in inbound_by_phone:
+        inbound_by_phone[k].sort()
+
+    hourly = [{"hour": h, "inbound": 0, "responded": 0} for h in range(24)]
+    daily = {}
+    response_seconds = []
+    responded_count = 0
+
+    for msg in inbound:
+        phone, ts = msg["phone"], msg["ts"]
+        hourly[ts.hour]["inbound"] += 1
+
+        date_key = ts.date().isoformat()
+        daily.setdefault(date_key, {"inbound": 0, "outbound": 0})
+        daily[date_key]["inbound"] += 1
+
+        # Bound the "did this get a reply" window at the next inbound message from the
+        # same number (so a reply to a later text doesn't get credited to an earlier one),
+        # capped at 48 hours out if there's no next inbound message.
+        same_phone_inbound = inbound_by_phone.get(phone, [])
+        idx = bisect.bisect_right(same_phone_inbound, ts)
+        window_end = same_phone_inbound[idx] if idx < len(same_phone_inbound) else ts + dt.timedelta(hours=48)
+
+        candidates = outbound_by_phone.get(phone, [])
+        pos = bisect.bisect_right(candidates, ts)
+        if pos < len(candidates) and candidates[pos] <= window_end:
+            delta = (candidates[pos] - ts).total_seconds()
+            if delta >= 0:
+                response_seconds.append(delta)
+                responded_count += 1
+                hourly[ts.hour]["responded"] += 1
+
+    for msg in outbound:
+        date_key = msg["ts"].date().isoformat()
+        daily.setdefault(date_key, {"inbound": 0, "outbound": 0})
+        daily[date_key]["outbound"] += 1
+
+    total_inbound = len(inbound)
+    total_outbound = len(outbound)
+    response_rate = round((responded_count / total_inbound * 100), 1) if total_inbound else 0.0
+    avg_response = (sum(response_seconds) / len(response_seconds)) if response_seconds else None
+
+    median_response = None
+    if response_seconds:
+        s = sorted(response_seconds)
+        n = len(s)
+        median_response = s[n // 2] if n % 2 else (s[n // 2 - 1] + s[n // 2]) / 2
+
+    hourly_out = []
+    for h in hourly:
+        rate = round((h["responded"] / h["inbound"] * 100), 1) if h["inbound"] else 0.0
+        hourly_out.append({"hour": h["hour"], "inbound": h["inbound"], "responded": h["responded"], "rate": rate})
+
+    eligible = [h for h in hourly_out if h["inbound"] >= 2]
+    pool = eligible if eligible else [h for h in hourly_out if h["inbound"] > 0]
+    best_hour = max(pool, key=lambda h: h["rate"]) if pool else None
+
+    bucket_defs = [
+        ("Under 5 min", 0, 300),
+        ("5 to 30 min", 300, 1800),
+        ("30 min to 2 hr", 1800, 7200),
+        ("2 to 24 hr", 7200, 86400),
+        ("Over 24 hr", 86400, float("inf")),
+    ]
+    response_buckets = [
+        {"label": label, "count": sum(1 for s in response_seconds if lo <= s < hi)}
+        for label, lo, hi in bucket_defs
+    ]
+    response_buckets.append({"label": "No reply yet", "count": total_inbound - responded_count})
+
+    daily_sorted = sorted(daily.items())[-30:]
+    daily_out = [{"date": d, "inbound": v["inbound"], "outbound": v["outbound"]} for d, v in daily_sorted]
+
+    return jsonify({
+        "totalInbound": total_inbound,
+        "totalOutbound": total_outbound,
+        "respondedCount": responded_count,
+        "responseRate": response_rate,
+        "avgResponseSeconds": avg_response,
+        "medianResponseSeconds": median_response,
+        "hourly": hourly_out,
+        "bestHour": best_hour,
+        "responseBuckets": response_buckets,
+        "dailyVolume": daily_out,
+    })
 
 
 # ---------- send a message ----------
