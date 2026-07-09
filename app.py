@@ -164,12 +164,14 @@ def messages():
         try:
             phone = m.get("from")
             crm = db.get_contact(phone)
+            raw_date = m.get("date_sent") or m.get("date_created")
             enriched.append({
                 "sid": m.get("sid"),
                 "from": phone,
                 "to": m.get("to"),
                 "body": m.get("body"),
-                "dateSent": m.get("date_sent") or m.get("date_created"),
+                "dateSent": raw_date,
+                "_sortTs": _parse_ts(raw_date),
                 "numMedia": int(m.get("num_media") or 0),
                 "status": crm["status"],
                 "notes": crm["notes"],
@@ -183,7 +185,14 @@ def messages():
             app.logger.warning(f"Skipped malformed message {m.get('sid')}: {e}")
             continue
 
-    enriched.sort(key=lambda m: m["dateSent"] or "", reverse=True)
+    # Sort by the parsed datetime, not the raw string. SignalWire's RFC2822-style dates
+    # ("Thu, 9 Jul 2026 22:07:30 +0000") don't sort correctly as plain text, since month
+    # names aren't in calendar order and single-digit days get inconsistent spacing.
+    epoch = dt.datetime(1970, 1, 1, tzinfo=dt.timezone.utc)
+    enriched.sort(key=lambda m: m["_sortTs"] or epoch, reverse=True)
+    for m in enriched:
+        del m["_sortTs"]
+
     return jsonify({"count": len(enriched), "messages": enriched, "skipped": skipped})
 
 
