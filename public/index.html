@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-<title>Zócalo Capital</title>
+<title>Inbound: Zócalo Capital</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;600;700&family=Inter:wght@400;500;600&display=swap" rel="stylesheet">
 <style>
@@ -23,6 +23,42 @@
     --mono: 'JetBrains Mono', monospace;
     --sans: 'Inter', sans-serif;
   }
+
+  html[data-theme="light"] {
+    --bg: #F5F6F8;
+    --panel: #FFFFFF;
+    --panel-alt: #F0F1F4;
+    --border: #DDE1E8;
+    --text: #171B24;
+    --text-muted: #626B7E;
+    --text-dim: #97A0B3;
+    --accent: #12A876;
+    --accent-dim: #E4F8F0;
+    --amber: #C46A16;
+    --red: #D6423F;
+    --blue: #2E5FD1;
+  }
+
+  html[data-theme="light"] .badge.new { background: rgba(196,106,22,0.1); }
+  html[data-theme="light"] .badge.contacted { background: rgba(46,95,209,0.1); }
+  html[data-theme="light"] .badge.qualified,
+  html[data-theme="light"] .badge.healthy { background: rgba(18,168,118,0.1); }
+  html[data-theme="light"] .badge.contract { background: rgba(142,58,204,0.1); color: #8E3ACC; border-color: rgba(142,58,204,0.35); }
+  html[data-theme="light"] .badge.dead,
+  html[data-theme="light"] .badge.fatigued { background: rgba(214,66,63,0.1); }
+  html[data-theme="light"] .kpi-card .value.accent { color: var(--accent); }
+
+  body, .btn, input, select, textarea, .badge, .tier-tab {
+    transition: background-color 0.15s ease, color 0.15s ease, border-color 0.15s ease;
+  }
+
+  .theme-toggle {
+    display: flex; align-items: center; justify-content: center;
+    width: 28px; height: 28px; border-radius: 6px;
+    border: 1px solid var(--border); background: transparent; color: var(--text-muted);
+    cursor: pointer; font-size: 14px; line-height: 1;
+  }
+  .theme-toggle:hover { border-color: var(--accent); color: var(--accent); }
 
   * { box-sizing: border-box; }
 
@@ -226,7 +262,35 @@
   .badge.new { background: rgba(255,145,66,0.15); color: var(--amber); border: 1px solid rgba(255,145,66,0.4); }
   .badge.contacted { background: rgba(91,140,255,0.15); color: var(--blue); border: 1px solid rgba(91,140,255,0.4); }
   .badge.qualified { background: rgba(55,232,160,0.15); color: var(--accent); border: 1px solid rgba(55,232,160,0.4); }
+  .badge.contract { background: rgba(191,116,255,0.15); color: #BF74FF; border: 1px solid rgba(191,116,255,0.4); }
   .badge.dead { background: rgba(255,92,92,0.15); color: var(--red); border: 1px solid rgba(255,92,92,0.4); }
+  .badge.fatigued { background: rgba(255,92,92,0.15); color: var(--red); border: 1px solid rgba(255,92,92,0.4); }
+  .badge.healthy { background: rgba(55,232,160,0.15); color: var(--accent); border: 1px solid rgba(55,232,160,0.4); }
+
+  /* ---------- dashboard tiers ---------- */
+  .tier-tabs { display: flex; gap: 4px; margin-bottom: 16px; }
+  .tier-tab {
+    font-family: var(--mono); font-size: 11px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.05em;
+    background: var(--panel); border: 1px solid var(--border); color: var(--text-muted);
+    padding: 7px 14px; border-radius: 20px; cursor: pointer;
+  }
+  .tier-tab:hover { color: var(--text); }
+  .tier-tab.active { color: #06110B; background: var(--accent); border-color: var(--accent); }
+
+  .data-table { width: 100%; border-collapse: collapse; font-size: 12px; margin-top: 4px; }
+  .data-table th { text-align: left; padding: 6px 10px; font-family: var(--mono); font-size: 10px; text-transform: uppercase; color: var(--text-muted); border-bottom: 1px solid var(--border); }
+  .data-table td { padding: 7px 10px; border-bottom: 1px solid var(--border); font-family: var(--mono); }
+  .data-table tr:last-child td { border-bottom: none; }
+
+  /* ---------- campaign manager ---------- */
+  .campaign-item {
+    background: var(--panel-alt); border: 1px solid var(--border); border-radius: 6px;
+    padding: 10px 12px; margin-bottom: 8px; font-size: 12px;
+  }
+  .campaign-item .cname { font-weight: 600; font-size: 13px; }
+  .campaign-item .cmeta { color: var(--text-dim); font-family: var(--mono); font-size: 11px; margin-top: 4px; }
+  .campaign-item .ccost-row { display: flex; align-items: center; gap: 6px; margin-top: 6px; }
+  .campaign-item input[type="text"], .campaign-item input[type="number"] { padding: 5px 8px; font-size: 12px; }
 
   .empty, .loading {
     padding: 60px 20px;
@@ -375,6 +439,7 @@
   <div class="conn">
     <div class="signal-bars" id="signalBars"><div class="bar"></div><div class="bar"></div><div class="bar"></div><div class="bar"></div></div>
     <span id="connLabel">not connected</span>
+    <button class="theme-toggle" id="themeToggle" title="Toggle light/dark mode">◐</button>
     <button class="btn small" id="disconnectBtn" style="display:none;">Disconnect</button>
     <button class="btn small primary" id="refreshBtn" style="display:none;">Refresh</button>
   </div>
@@ -389,16 +454,34 @@
 </div>
 
 <script>
+const STATUSES = ['new','contacted','qualified','contract','dead'];
+
 const state = {
   connected: false,
   messages: [],
   filterText: '',
-  statusFilters: new Set(['new','contacted','qualified','dead']),
+  statusFilters: new Set(STATUSES),
   activePhone: null,
   fromNumber: null,
   view: 'inbox',
-  analytics: null
+  analytics: null,
+  campaigns: [],
+  dashboard: null,
+  dashboardTier: 'daily'
 };
+
+async function loadCampaigns() {
+  try {
+    const r = await fetch('/api/campaigns');
+    const j = await r.json();
+    if (r.ok) state.campaigns = j.campaigns;
+  } catch (e) { /* non-fatal, campaign UI just shows empty */ }
+}
+
+function campaignName(id) {
+  const c = state.campaigns.find(c => String(c.id) === String(id));
+  return c ? c.name : null;
+}
 
 const app = document.getElementById('app');
 const signalBars = document.getElementById('signalBars');
@@ -409,6 +492,24 @@ const overlay = document.getElementById('overlay');
 const drawer = document.getElementById('drawer');
 const drawerContent = document.getElementById('drawerContent');
 const drawerClose = document.getElementById('drawerClose');
+
+// ---------- theme ----------
+function applyTheme(theme) {
+  document.documentElement.setAttribute('data-theme', theme);
+  const btn = document.getElementById('themeToggle');
+  if (btn) btn.textContent = theme === 'light' ? '◑' : '◐';
+}
+(function initTheme() {
+  let saved = 'dark';
+  try { saved = localStorage.getItem('theme') || 'dark'; } catch (e) { /* storage unavailable, default to dark */ }
+  applyTheme(saved);
+})();
+document.getElementById('themeToggle').addEventListener('click', () => {
+  const current = document.documentElement.getAttribute('data-theme') === 'light' ? 'light' : 'dark';
+  const next = current === 'light' ? 'dark' : 'light';
+  applyTheme(next);
+  try { localStorage.setItem('theme', next); } catch (e) { /* non-fatal */ }
+});
 
 function setConnected(isConnected, spaceName, fromNumber) {
   state.connected = isConnected;
@@ -455,7 +556,7 @@ function renderConnectGate(errorMsg) {
     const j = await r.json();
     if (!r.ok) { renderConnectGate(j.error || 'Connection failed.'); return; }
     setConnected(true, j.space, j.fromNumber);
-    loadMessages();
+    render();
   };
 }
 
@@ -463,8 +564,9 @@ function renderCrmShell() {
   app.innerHTML = `
     <div class="view-tabs">
       <button class="view-tab ${state.view === 'inbox' ? 'active' : ''}" id="tabInbox">Inbox</button>
-      <button class="view-tab ${state.view === 'ops' ? 'active' : ''}" id="tabOps">Daily ops</button>
       <button class="view-tab ${state.view === 'analytics' ? 'active' : ''}" id="tabAnalytics">Analytics</button>
+      <button class="view-tab ${state.view === 'dashboard' ? 'active' : ''}" id="tabDashboard">Dashboard</button>
+      <button class="view-tab ${state.view === 'campaigns' ? 'active' : ''}" id="tabCampaigns">Campaigns</button>
     </div>
     <div class="layout" id="viewInbox" style="display:${state.view === 'inbox' ? 'grid' : 'none'};">
       <div class="sidebar">
@@ -481,20 +583,24 @@ function renderCrmShell() {
         <div class="table-wrap" id="tableWrap"><div class="loading">Loading inbound messages...</div></div>
       </div>
     </div>
-    <div class="dash-wrap" id="viewOps" style="display:${state.view === 'ops' ? 'block' : 'none'};">
-      <div class="loading">Loading today's stats...</div>
-    </div>
     <div class="dash-wrap" id="viewAnalytics" style="display:${state.view === 'analytics' ? 'block' : 'none'};">
       <div class="loading">Loading analytics...</div>
+    </div>
+    <div class="dash-wrap" id="viewDashboard" style="display:${state.view === 'dashboard' ? 'block' : 'none'};">
+      <div class="loading">Loading dashboard...</div>
+    </div>
+    <div class="dash-wrap" id="viewCampaigns" style="display:${state.view === 'campaigns' ? 'block' : 'none'};">
+      <div class="loading">Loading campaigns...</div>
     </div>
   `;
 
   document.getElementById('tabInbox').addEventListener('click', () => switchView('inbox'));
-  document.getElementById('tabOps').addEventListener('click', () => switchView('ops'));
   document.getElementById('tabAnalytics').addEventListener('click', () => switchView('analytics'));
+  document.getElementById('tabDashboard').addEventListener('click', () => switchView('dashboard'));
+  document.getElementById('tabCampaigns').addEventListener('click', () => switchView('campaigns'));
 
   const statusEl = document.getElementById('statusFilters');
-  ['new','contacted','qualified','dead'].forEach(s => {
+  STATUSES.forEach(s => {
     const label = document.createElement('label');
     label.innerHTML = `<input type="checkbox" checked data-status="${s}" /> ${s}`;
     statusEl.appendChild(label);
@@ -581,87 +687,19 @@ async function loadMessages() {
 
 function switchView(view) {
   state.view = view;
-  const inboxEl = document.getElementById('viewInbox');
-  const opsEl = document.getElementById('viewOps');
-  const analyticsEl = document.getElementById('viewAnalytics');
-  const tabInbox = document.getElementById('tabInbox');
-  const tabOps = document.getElementById('tabOps');
-  const tabAnalytics = document.getElementById('tabAnalytics');
-  if (!inboxEl || !opsEl || !analyticsEl) return;
-  inboxEl.style.display = view === 'inbox' ? 'grid' : 'none';
-  opsEl.style.display = view === 'ops' ? 'block' : 'none';
-  analyticsEl.style.display = view === 'analytics' ? 'block' : 'none';
-  tabInbox.classList.toggle('active', view === 'inbox');
-  tabOps.classList.toggle('active', view === 'ops');
-  tabAnalytics.classList.toggle('active', view === 'analytics');
-  if (view === 'ops') loadOps();
+  const views = { inbox: 'viewInbox', analytics: 'viewAnalytics', dashboard: 'viewDashboard', campaigns: 'viewCampaigns' };
+  const tabs = { inbox: 'tabInbox', analytics: 'tabAnalytics', dashboard: 'tabDashboard', campaigns: 'tabCampaigns' };
+  Object.entries(views).forEach(([v, id]) => {
+    const el = document.getElementById(id);
+    if (el) el.style.display = v === view ? (v === 'inbox' ? 'grid' : 'block') : 'none';
+  });
+  Object.entries(tabs).forEach(([v, id]) => {
+    const el = document.getElementById(id);
+    if (el) el.classList.toggle('active', v === view);
+  });
   if (view === 'analytics') loadAnalytics();
-}
-
-async function loadOps() {
-  const wrap = document.getElementById('viewOps');
-  if (!wrap) return;
-  wrap.innerHTML = `<div class="loading">Loading today's stats...</div>`;
-  try {
-    const r = await fetch('/api/ops');
-    const j = await r.json();
-    if (!r.ok) {
-      wrap.innerHTML = `<div class="empty">${j.error || 'Failed to load daily ops.'}</div>`;
-      return;
-    }
-    renderOps(j);
-  } catch (e) {
-    wrap.innerHTML = `<div class="empty">Network error reaching the server: ${e.message}</div>`;
-  }
-}
-
-function renderOps(o) {
-  const wrap = document.getElementById('viewOps');
-  if (!wrap) return;
-
-  const errorChart = o.errorBreakdown.length
-    ? renderBucketChart(o.errorBreakdown.map(e => ({ label: `${e.label} (${e.code})`, count: e.count })))
-    : `<div class="empty" style="padding:20px;">No delivery failures today.</div>`;
-
-  wrap.innerHTML = `
-    <div class="kpi-grid">
-      <div class="kpi-card">
-        <div class="label">Sent today</div>
-        <div class="value">${o.totalSentToday}</div>
-        <div class="sub">${o.deliveredToday} delivered</div>
-      </div>
-      <div class="kpi-card">
-        <div class="label">Delivery rate today</div>
-        <div class="value ${o.deliveryRateToday >= 90 ? 'accent' : ''}" style="${o.deliveryRateToday < 85 && o.totalSentToday > 0 ? 'color:var(--red);' : ''}">${o.deliveryRateToday}%</div>
-        <div class="sub">target 90%+</div>
-      </div>
-      <div class="kpi-card">
-        <div class="label">Active conversations</div>
-        <div class="value accent">${o.activeConversations}</div>
-        <div class="sub">inbound today awaiting a reply</div>
-      </div>
-      <div class="kpi-card">
-        <div class="label">Speed to lead today</div>
-        <div class="value">${fmtDuration(o.avgSpeedToLeadToday)}</div>
-        <div class="sub">target under 15m</div>
-      </div>
-      <div class="kpi-card">
-        <div class="label">Leads today</div>
-        <div class="value accent">${o.leadsToday}</div>
-        <div class="sub">marked qualified today</div>
-      </div>
-      <div class="kpi-card">
-        <div class="label">Opt-out rate today</div>
-        <div class="value" style="${o.optOutRateToday > 15 ? 'color:var(--red);' : ''}">${o.optOutRateToday}%</div>
-        <div class="sub">${o.optOutsToday} of ${o.totalRepliesToday} replies</div>
-      </div>
-    </div>
-    <div class="chart-card">
-      <h4>Carrier error breakdown, today</h4>
-      <div class="chart-note">Failed or undelivered sends today, grouped by carrier error code.</div>
-      ${errorChart}
-    </div>
-  `;
+  if (view === 'dashboard') loadDashboard();
+  if (view === 'campaigns') renderCampaignsView();
 }
 
 async function loadAnalytics() {
@@ -680,6 +718,238 @@ async function loadAnalytics() {
   } catch (e) {
     wrap.innerHTML = `<div class="empty">Network error reaching the server: ${e.message}</div>`;
   }
+}
+
+// ---------- Dashboard (Daily / Weekly / Monthly / All-Time) ----------
+async function loadDashboard() {
+  const wrap = document.getElementById('viewDashboard');
+  if (!wrap) return;
+  wrap.innerHTML = `<div class="loading">Pulling reply data from SignalWire...</div>`;
+  try {
+    const r = await fetch('/api/dashboard');
+    const j = await r.json();
+    if (!r.ok) {
+      wrap.innerHTML = `<div class="empty">${j.error || 'Failed to load dashboard.'}</div>`;
+      return;
+    }
+    state.dashboard = j;
+    state.campaigns = j.campaigns;
+    renderDashboard();
+  } catch (e) {
+    wrap.innerHTML = `<div class="empty">Network error reaching the server: ${e.message}</div>`;
+  }
+}
+
+function fmtHours(h) {
+  if (h === null || h === undefined) return 'N/A';
+  if (h < 1) return `${Math.round(h * 60)}m`;
+  if (h < 48) return `${h.toFixed(1)}h`;
+  return `${(h / 24).toFixed(1)}d`;
+}
+
+function fmtMoney(n) {
+  if (n === null || n === undefined) return 'N/A';
+  return `$${Number(n).toLocaleString(undefined, {maximumFractionDigits: 2})}`;
+}
+
+function renderDashboard() {
+  const wrap = document.getElementById('viewDashboard');
+  if (!wrap || !state.dashboard) return;
+  const d = state.dashboard;
+  const tier = state.dashboardTier;
+
+  wrap.innerHTML = `
+    <div class="tier-tabs">
+      <button class="tier-tab ${tier==='daily'?'active':''}" data-tier="daily">Daily</button>
+      <button class="tier-tab ${tier==='weekly'?'active':''}" data-tier="weekly">Weekly</button>
+      <button class="tier-tab ${tier==='monthly'?'active':''}" data-tier="monthly">Monthly</button>
+      <button class="tier-tab ${tier==='alltime'?'active':''}" data-tier="alltime">All-Time</button>
+    </div>
+    <div id="tierBody"></div>
+  `;
+  wrap.querySelectorAll('.tier-tab').forEach(btn => {
+    btn.addEventListener('click', () => { state.dashboardTier = btn.getAttribute('data-tier'); renderDashboard(); });
+  });
+
+  const body = document.getElementById('tierBody');
+
+  if (tier === 'daily') {
+    const dd = d.daily;
+    body.innerHTML = `
+      <div class="kpi-grid">
+        <div class="kpi-card">
+          <div class="label">Opt-out ratio (today)</div>
+          <div class="value ${dd.optOutRatio > 5 ? '' : 'accent'}">${dd.optOutRatio}%</div>
+          <div class="sub">${dd.optOutCount} of ${dd.totalInboundToday} inbound today</div>
+        </div>
+        <div class="kpi-card">
+          <div class="label">Lead-to-offer velocity (today's offers)</div>
+          <div class="value accent">${fmtHours(dd.leadToOfferVelocity.avgHours)}</div>
+          <div class="sub">${dd.leadToOfferVelocity.count} offer${dd.leadToOfferVelocity.count===1?'':'s'} sent today, from positive engagement to purchase agreement</div>
+        </div>
+        <div class="kpi-card">
+          <div class="label">Lead-to-offer velocity (all-time)</div>
+          <div class="value">${fmtHours(dd.leadToOfferVelocityAllTime.avgHours)}</div>
+          <div class="sub">median ${fmtHours(dd.leadToOfferVelocityAllTime.medianHours)}, ${dd.leadToOfferVelocityAllTime.count} tracked</div>
+        </div>
+        <div class="kpi-card">
+          <div class="label">Messages today</div>
+          <div class="value">${dd.totalMessagesToday}</div>
+          <div class="sub">inbound + outbound, all numbers</div>
+        </div>
+      </div>
+      <div class="chart-card">
+        <h4>Carrier error codes (today)</h4>
+        <div class="chart-note">Failed/undelivered sends by SignalWire error code. Watch for spikes on a single code — usually a carrier filter, not a bad list.</div>
+        ${dd.carrierErrors.length ? `
+          <table class="data-table">
+            <thead><tr><th>Error code</th><th>Count</th></tr></thead>
+            <tbody>${dd.carrierErrors.map(e => `<tr><td>${e.code}</td><td>${e.count}</td></tr>`).join('')}</tbody>
+          </table>
+        ` : `<div class="chart-note">No carrier errors today.</div>`}
+      </div>
+    `;
+  }
+
+  if (tier === 'weekly') {
+    const lf = d.weekly.listFatigue;
+    body.innerHTML = `
+      <div class="chart-card">
+        <h4>List fatigue / saturation, by campaign</h4>
+        <div class="chart-note">Response rate this week vs last week per campaign. A drop of 15+ points on a list with real volume last week gets flagged as fatigued — time to rotate the list or the copy.</div>
+        ${lf.length ? `
+          <table class="data-table">
+            <thead><tr><th>Campaign</th><th>Last week</th><th>This week</th><th>Delta</th><th>Status</th></tr></thead>
+            <tbody>${lf.map(c => `
+              <tr>
+                <td>${c.name}${c.market?` (${c.market})`:''}</td>
+                <td>${c.lastWeekRate===null?'N/A':c.lastWeekRate+'% ('+c.lastWeekInbound+')'}</td>
+                <td>${c.thisWeekRate===null?'N/A':c.thisWeekRate+'% ('+c.thisWeekInbound+')'}</td>
+                <td>${c.delta===null?'N/A':(c.delta>0?'+':'')+c.delta+'pt'}</td>
+                <td><span class="badge ${c.fatigued?'fatigued':'healthy'}">${c.fatigued?'fatigued':'ok'}</span></td>
+              </tr>
+            `).join('')}</tbody>
+          </table>
+        ` : `<div class="chart-note">No campaigns with inbound activity yet this week or last. Assign contacts to a campaign to track this.</div>`}
+      </div>
+    `;
+  }
+
+  if (tier === 'monthly' || tier === 'alltime') {
+    const md = tier === 'monthly' ? d.monthly : d.allTime;
+    const label = tier === 'monthly' ? 'this month' : 'all-time';
+    body.innerHTML = `
+      <div class="kpi-grid">
+        <div class="kpi-card">
+          <div class="label">Skip-trace accuracy</div>
+          <div class="value accent">${md.skipTraceAccuracy===null?'N/A':md.skipTraceAccuracy+'%'}</div>
+          <div class="sub">${md.skipTraceAccurateCount} good of ${md.skipTraceDeterminedCount} contacts on a campaign list</div>
+        </div>
+        <div class="kpi-card">
+          <div class="label">Revenue per delivered text (${label})</div>
+          <div class="value accent">${fmtMoney(md.revenuePerDeliveredText.revenuePerText)}</div>
+          <div class="sub">${fmtMoney(md.revenuePerDeliveredText.totalRevenue)} revenue / ${md.revenuePerDeliveredText.deliveredCount} delivered texts</div>
+        </div>
+      </div>
+      <div class="chart-card">
+        <h4>Cost per lead by list source (${label})</h4>
+        <div class="chart-note">Campaign cost divided by contacts that hit positive engagement. Lower is better — this is what tells you which list to fund next round.</div>
+        ${md.cplBySource.length ? `
+          <table class="data-table">
+            <thead><tr><th>Campaign</th><th>Cost</th><th>Leads</th><th>CPL</th></tr></thead>
+            <tbody>${md.cplBySource.map(c => `
+              <tr>
+                <td>${c.name}${c.market?` (${c.market})`:''}</td>
+                <td>${fmtMoney(c.cost)}</td>
+                <td>${c.leads}</td>
+                <td>${c.cpl===null?'N/A':fmtMoney(c.cpl)}</td>
+              </tr>
+            `).join('')}</tbody>
+          </table>
+        ` : `<div class="chart-note">No campaigns yet. Create one in the Campaigns tab.</div>`}
+      </div>
+    `;
+  }
+}
+
+// ---------- Campaigns manager ----------
+function renderCampaignsView() {
+  const wrap = document.getElementById('viewCampaigns');
+  if (!wrap) return;
+
+  wrap.innerHTML = `
+    <div class="chart-card">
+      <h4>New campaign / batch</h4>
+      <div class="chart-note">A campaign is a real list/round — e.g. "Cape Coral Round 1" — so cost, response rate, and list fatigue can be tracked per batch instead of lumped into one market string.</div>
+      <div class="field"><label>Name</label><input type="text" id="newCampName" placeholder="Cape Coral Round 1" /></div>
+      <div class="field"><label>Market</label><input type="text" id="newCampMarket" placeholder="Cape Coral, FL" /></div>
+      <div class="field"><label>List source</label><input type="text" id="newCampSource" placeholder="pre-foreclosure, probate, vacant high-equity..." /></div>
+      <div class="field"><label>Cost ($)</label><input type="text" id="newCampCost" placeholder="0" /></div>
+      <button class="btn primary" id="createCampBtn">Create campaign</button>
+      <div id="createCampStatus" style="font-family:var(--mono); font-size:12px; margin-top:8px;"></div>
+    </div>
+    <div class="chart-card">
+      <h4>Existing campaigns</h4>
+      <div id="campaignList"></div>
+    </div>
+  `;
+
+  document.getElementById('createCampBtn').onclick = async () => {
+    const name = document.getElementById('newCampName').value.trim();
+    const market = document.getElementById('newCampMarket').value.trim();
+    const listSource = document.getElementById('newCampSource').value.trim();
+    const cost = parseFloat(document.getElementById('newCampCost').value) || 0;
+    const statusEl = document.getElementById('createCampStatus');
+    if (!name) { statusEl.style.color = 'var(--red)'; statusEl.textContent = 'Name is required.'; return; }
+    const r = await fetch('/api/campaigns', {
+      method: 'POST', headers: {'Content-Type':'application/json'},
+      body: JSON.stringify({ name, market, listSource, cost })
+    });
+    const j = await r.json();
+    if (!r.ok) { statusEl.style.color = 'var(--red)'; statusEl.textContent = j.error || 'Failed to create.'; return; }
+    statusEl.style.color = 'var(--accent)'; statusEl.textContent = 'Created.';
+    document.getElementById('newCampName').value = '';
+    document.getElementById('newCampMarket').value = '';
+    document.getElementById('newCampSource').value = '';
+    document.getElementById('newCampCost').value = '';
+    await loadCampaigns();
+    renderCampaignList();
+  };
+
+  renderCampaignList();
+}
+
+function renderCampaignList() {
+  const listEl = document.getElementById('campaignList');
+  if (!listEl) return;
+  if (!state.campaigns.length) {
+    listEl.innerHTML = `<div class="chart-note">No campaigns yet.</div>`;
+    return;
+  }
+  listEl.innerHTML = state.campaigns.map(c => `
+    <div class="campaign-item" data-id="${c.id}">
+      <div class="cname">${c.name}</div>
+      <div class="cmeta">${c.market || 'no market set'}${c.listSource ? ' · ' + c.listSource : ''} · created ${fmtTime(c.createdAt)}</div>
+      <div class="ccost-row">
+        <label style="font-family:var(--mono); font-size:11px; color:var(--text-muted);">Cost $</label>
+        <input type="text" class="camp-cost-input" value="${c.cost}" style="width:100px;" />
+        <button class="btn small update-cost-btn">Update cost</button>
+      </div>
+    </div>
+  `).join('');
+
+  listEl.querySelectorAll('.campaign-item').forEach(item => {
+    const id = item.getAttribute('data-id');
+    item.querySelector('.update-cost-btn').onclick = async () => {
+      const cost = parseFloat(item.querySelector('.camp-cost-input').value) || 0;
+      await fetch(`/api/campaigns/${id}`, {
+        method: 'PUT', headers: {'Content-Type':'application/json'},
+        body: JSON.stringify({ cost })
+      });
+      await loadCampaigns();
+      renderCampaignList();
+    };
+  });
 }
 
 function fmtDuration(seconds) {
@@ -828,6 +1098,15 @@ async function openDrawer(phone) {
   const latest = msgsForPhone[0];
   const rec = await (await fetch(`/api/contacts/${encodeURIComponent(phone)}`)).json();
 
+  const toLocalInput = (iso) => {
+    if (!iso) return '';
+    const d = new Date(iso);
+    if (isNaN(d)) return '';
+    const pad = n => String(n).padStart(2, '0');
+    return `${d.getFullYear()}-${pad(d.getMonth()+1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`;
+  };
+  const fromLocalInput = (val) => val ? new Date(val).toISOString() : '';
+
   drawerContent.innerHTML = `
     <h3>${phone}</h3>
     <div class="sub">${msgsForPhone.length} inbound message${msgsForPhone.length === 1 ? '' : 's'} on file</div>
@@ -835,7 +1114,14 @@ async function openDrawer(phone) {
     <div class="field">
       <label>Status</label>
       <select id="statusSelect">
-        ${['new','contacted','qualified','dead'].map(s => `<option value="${s}" ${rec.status===s?'selected':''}>${s}</option>`).join('')}
+        ${STATUSES.map(s => `<option value="${s}" ${rec.status===s?'selected':''}>${s}</option>`).join('')}
+      </select>
+    </div>
+    <div class="field">
+      <label>Campaign / batch</label>
+      <select id="campaignSelect">
+        <option value="">(none)</option>
+        ${state.campaigns.map(c => `<option value="${c.id}" ${String(rec.campaign_id)===String(c.id)?'selected':''}>${c.name}${c.market?` — ${c.market}`:''}</option>`).join('')}
       </select>
     </div>
     <div class="field">
@@ -846,6 +1132,30 @@ async function openDrawer(phone) {
       <label>Notes</label>
       <textarea id="notesInput" placeholder="Deal notes, callback times, ARV, etc.">${rec.notes || ''}</textarea>
     </div>
+
+    <div style="margin-top:18px; padding-top:16px; border-top:1px solid var(--border);">
+      <div class="field" style="display:flex; align-items:center; gap:8px;">
+        <input type="checkbox" id="skipBadInput" style="width:auto;" ${rec.skip_bad ? 'checked' : ''} />
+        <label style="margin:0;" for="skipBadInput">Bad skip trace (wrong number / disconnected)</label>
+      </div>
+      <div class="field">
+        <label>Positive engagement (seller dropped price)</label>
+        <input type="datetime-local" id="posEngagementInput" value="${toLocalInput(rec.positive_engagement_at)}" />
+      </div>
+      <div class="field">
+        <label>Purchase agreement sent</label>
+        <input type="datetime-local" id="offerSentInput" value="${toLocalInput(rec.offer_sent_at)}" />
+      </div>
+      <div class="field">
+        <label>Contract executed</label>
+        <input type="datetime-local" id="contractAtInput" value="${toLocalInput(rec.contract_at)}" />
+      </div>
+      <div class="field">
+        <label>Revenue on this deal ($)</label>
+        <input type="text" id="revenueInput" value="${rec.revenue || 0}" placeholder="0" />
+      </div>
+    </div>
+
     <button class="btn primary" id="saveContactBtn" style="width:100%;">Save</button>
 
     <div style="margin-top:24px; padding-top:20px; border-top:1px solid var(--border);">
@@ -867,9 +1177,21 @@ async function openDrawer(phone) {
     const status = document.getElementById('statusSelect').value;
     const market = document.getElementById('marketInput').value;
     const notes = document.getElementById('notesInput').value;
+    const campaignId = document.getElementById('campaignSelect').value;
+    const skipBad = document.getElementById('skipBadInput').checked;
+    const revenue = parseFloat(document.getElementById('revenueInput').value) || 0;
+    const positiveEngagementAt = fromLocalInput(document.getElementById('posEngagementInput').value);
+    const offerSentAt = fromLocalInput(document.getElementById('offerSentInput').value);
+    const contractAt = fromLocalInput(document.getElementById('contractAtInput').value);
     await fetch(`/api/contacts/${encodeURIComponent(phone)}`, {
       method: 'PUT', headers: {'Content-Type':'application/json'},
-      body: JSON.stringify({ status, market, notes })
+      body: JSON.stringify({
+        status, market, notes, revenue, skipBad,
+        campaignId: campaignId || null,
+        positiveEngagementAt: positiveEngagementAt || null,
+        offerSentAt: offerSentAt || null,
+        contractAt: contractAt || null
+      })
     });
     state.messages.forEach(m => { if (m.from === phone) { m.status = status; m.market = market; m.notes = notes; } });
     renderTable();
@@ -993,9 +1315,7 @@ disconnectBtn.addEventListener('click', async () => {
   render();
 });
 refreshBtn.addEventListener('click', () => {
-  if (state.view === 'analytics') loadAnalytics();
-  else if (state.view === 'ops') loadOps();
-  else loadMessages();
+  if (state.view === 'analytics') loadAnalytics(); else loadMessages();
 });
 
 function render() {
@@ -1003,6 +1323,7 @@ function render() {
     renderConnectGate();
   } else {
     renderCrmShell();
+    loadCampaigns();
     loadMessages();
   }
 }
