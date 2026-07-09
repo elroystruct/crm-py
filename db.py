@@ -1,9 +1,11 @@
 """
-Contact/lead storage.
+Contact/lead storage, plus campaigns (batches/lists) and the deal-economics
+fields needed for CPL, revenue-per-text, list fatigue, and lead-to-offer
+velocity reporting.
 
 - If DATABASE_URL is set (e.g. Render's managed Postgres add-on), use Postgres.
   This survives redeploys, since Render's web service disk is ephemeral.
-- Otherwise, fall back to a local SQLite file (data/contacts.db), fine for
+- Otherwise, fall back to a local SQLite file (data/contacts.db) — fine for
   local development, but note this resets on every Render redeploy if you
   don't attach a persistent disk or Postgres.
 """
@@ -15,9 +17,22 @@ import datetime as dt
 DATABASE_URL = os.environ.get("DATABASE_URL")
 SQLITE_PATH = os.path.join(os.path.dirname(__file__), "data", "contacts.db")
 
-DEFAULT_RECORD = {"status": "new", "notes": "", "tags": [], "market": "", "statusUpdatedAt": ""}
+# Sentinel meaning "caller didn't pass this field, leave it alone" — distinct
+# from None, which callers use to explicitly clear a nullable field.
+_UNSET = object()
 
-_pg_pool = None
+DEFAULT_RECORD = {
+    "status": "new",
+    "notes": "",
+    "tags": [],
+    "market": "",
+    "campaign_id": None,
+    "revenue": 0.0,
+    "positive_engagement_at": None,
+    "offer_sent_at": None,
+    "contract_at": None,
+    "skip_bad": False,
+}
 
 
 def _using_postgres():
@@ -26,13 +41,24 @@ def _using_postgres():
 
 def _pg_conn():
     import psycopg2
-    global _pg_pool
-    # Render's DATABASE_URL sometimes uses postgres://, psycopg2 accepts it directly.
+    # Render's DATABASE_URL sometimes uses postgres:// — psycopg2 accepts it directly.
     return psycopg2.connect(DATABASE_URL, sslmode="require")
 
 
-def _now_iso():
+def now_iso():
     return dt.datetime.now(dt.timezone.utc).isoformat()
+
+
+def _add_column_if_missing(conn_or_cur, table, col, coltype, using_pg):
+    """Best-effort ALTER TABLE ADD COLUMN, ignoring 'already exists' errors.
+    Lets us evolve the schema on existing databases without a migration tool."""
+    try:
+        if using_pg:
+            conn_or_cur.execute(f"ALTER TABLE {table} ADD COLUMN IF NOT EXISTS {col} {coltype}")
+        else:
+            conn_or_cur.execute(f"ALTER TABLE {table} ADD COLUMN {col} {coltype}")
+    except Exception:
+        pass
 
 
 def init_db():
@@ -40,6 +66,16 @@ def init_db():
         conn = _pg_conn()
         cur = conn.cursor()
         cur.execute("""
+            CREATE TABLE IF NOT EXISTS campaigns (
+                id SERIAL PRIMARY KEY,
+                name TEXT NOT NULL,
+                market TEXT NOT NULL DEFAULT '',
+                list_source TEXT NOT NULL DEFAULT '',
+                cost DOUBLE PRECISION NOT NULL DEFAULT 0,
+                created_at TEXT NOT NULL
+            )
+        """)
+        cur.execute("""
             CREATE TABLE IF NOT EXISTS contacts (
                 phone TEXT PRIMARY KEY,
                 status TEXT NOT NULL DEFAULT 'new',
@@ -48,8 +84,13 @@ def init_db():
                 market TEXT NOT NULL DEFAULT ''
             )
         """)
-        # Migration for tables created before status_updated_at existed.
-        cur.execute("ALTER TABLE contacts ADD COLUMN IF NOT EXISTS status_updated_at TEXT NOT NULL DEFAULT ''")
+        # migrate in new columns for dbs created before this feature set existed
+        _add_column_if_missing(cur, "contacts", "campaign_id", "INTEGER", True)
+        _add_column_if_missing(cur, "contacts", "revenue", "DOUBLE PRECISION NOT NULL DEFAULT 0", True)
+        _add_column_if_missing(cur, "contacts", "positive_engagement_at", "TEXT", True)
+        _add_column_if_missing(cur, "contacts", "offer_sent_at", "TEXT", True)
+        _add_column_if_missing(cur, "contacts", "contract_at", "TEXT", True)
+        _add_column_if_missing(cur, "contacts", "skip_bad", "BOOLEAN NOT NULL DEFAULT FALSE", True)
         conn.commit()
         cur.close()
         conn.close()
@@ -57,6 +98,16 @@ def init_db():
         os.makedirs(os.path.dirname(SQLITE_PATH), exist_ok=True)
         conn = sqlite3.connect(SQLITE_PATH)
         conn.execute("""
+            CREATE TABLE IF NOT EXISTS campaigns (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                name TEXT NOT NULL,
+                market TEXT NOT NULL DEFAULT '',
+                list_source TEXT NOT NULL DEFAULT '',
+                cost REAL NOT NULL DEFAULT 0,
+                created_at TEXT NOT NULL
+            )
+        """)
+        conn.execute("""
             CREATE TABLE IF NOT EXISTS contacts (
                 phone TEXT PRIMARY KEY,
                 status TEXT NOT NULL DEFAULT 'new',
@@ -65,108 +116,241 @@ def init_db():
                 market TEXT NOT NULL DEFAULT ''
             )
         """)
-        # Migration for databases created before status_updated_at existed.
-        # SQLite has no "ADD COLUMN IF NOT EXISTS", so check first.
-        cols = [row[1] for row in conn.execute("PRAGMA table_info(contacts)").fetchall()]
-        if "status_updated_at" not in cols:
-            conn.execute("ALTER TABLE contacts ADD COLUMN status_updated_at TEXT NOT NULL DEFAULT ''")
+        existing_cols = {row[1] for row in conn.execute("PRAGMA table_info(contacts)").fetchall()}
+        if "campaign_id" not in existing_cols:
+            _add_column_if_missing(conn, "contacts", "campaign_id", "INTEGER", False)
+        if "revenue" not in existing_cols:
+            _add_column_if_missing(conn, "contacts", "revenue", "REAL NOT NULL DEFAULT 0", False)
+        if "positive_engagement_at" not in existing_cols:
+            _add_column_if_missing(conn, "contacts", "positive_engagement_at", "TEXT", False)
+        if "offer_sent_at" not in existing_cols:
+            _add_column_if_missing(conn, "contacts", "offer_sent_at", "TEXT", False)
+        if "contract_at" not in existing_cols:
+            _add_column_if_missing(conn, "contacts", "contract_at", "TEXT", False)
+        if "skip_bad" not in existing_cols:
+            _add_column_if_missing(conn, "contacts", "skip_bad", "INTEGER NOT NULL DEFAULT 0", False)
         conn.commit()
         conn.close()
+
+
+# ---------- campaigns ----------
+def list_campaigns():
+    if _using_postgres():
+        conn = _pg_conn()
+        cur = conn.cursor()
+        cur.execute("SELECT id, name, market, list_source, cost, created_at FROM campaigns ORDER BY created_at DESC")
+        rows = cur.fetchall()
+        cur.close()
+        conn.close()
+    else:
+        conn = sqlite3.connect(SQLITE_PATH)
+        rows = conn.execute(
+            "SELECT id, name, market, list_source, cost, created_at FROM campaigns ORDER BY created_at DESC"
+        ).fetchall()
+        conn.close()
+    return [
+        {"id": r[0], "name": r[1], "market": r[2], "listSource": r[3], "cost": r[4], "createdAt": r[5]}
+        for r in rows
+    ]
+
+
+def get_campaign(campaign_id):
+    for c in list_campaigns():
+        if str(c["id"]) == str(campaign_id):
+            return c
+    return None
+
+
+def create_campaign(name, market="", list_source="", cost=0.0):
+    created_at = now_iso()
+    if _using_postgres():
+        conn = _pg_conn()
+        cur = conn.cursor()
+        cur.execute(
+            "INSERT INTO campaigns (name, market, list_source, cost, created_at) VALUES (%s,%s,%s,%s,%s) RETURNING id",
+            (name, market, list_source, cost, created_at),
+        )
+        new_id = cur.fetchone()[0]
+        conn.commit()
+        cur.close()
+        conn.close()
+    else:
+        conn = sqlite3.connect(SQLITE_PATH)
+        cur = conn.execute(
+            "INSERT INTO campaigns (name, market, list_source, cost, created_at) VALUES (?,?,?,?,?)",
+            (name, market, list_source, cost, created_at),
+        )
+        new_id = cur.lastrowid
+        conn.commit()
+        conn.close()
+    return get_campaign(new_id)
+
+
+def update_campaign(campaign_id, name=None, market=None, list_source=None, cost=None):
+    existing = get_campaign(campaign_id)
+    if not existing:
+        return None
+    merged = {
+        "name": name if name is not None else existing["name"],
+        "market": market if market is not None else existing["market"],
+        "list_source": list_source if list_source is not None else existing["listSource"],
+        "cost": cost if cost is not None else existing["cost"],
+    }
+    if _using_postgres():
+        conn = _pg_conn()
+        cur = conn.cursor()
+        cur.execute(
+            "UPDATE campaigns SET name=%s, market=%s, list_source=%s, cost=%s WHERE id=%s",
+            (merged["name"], merged["market"], merged["list_source"], merged["cost"], campaign_id),
+        )
+        conn.commit()
+        cur.close()
+        conn.close()
+    else:
+        conn = sqlite3.connect(SQLITE_PATH)
+        conn.execute(
+            "UPDATE campaigns SET name=?, market=?, list_source=?, cost=? WHERE id=?",
+            (merged["name"], merged["market"], merged["list_source"], merged["cost"], campaign_id),
+        )
+        conn.commit()
+        conn.close()
+    return get_campaign(campaign_id)
+
+
+# ---------- contacts ----------
+SELECT_COLS = "status, notes, tags, market, campaign_id, revenue, positive_engagement_at, offer_sent_at, contract_at, skip_bad"
+
+
+def _row_to_record(row):
+    (status, notes, tags, market, campaign_id, revenue,
+     positive_engagement_at, offer_sent_at, contract_at, skip_bad) = row
+    return {
+        "status": status,
+        "notes": notes,
+        "tags": json.loads(tags) if tags else [],
+        "market": market,
+        "campaign_id": campaign_id,
+        "revenue": revenue or 0.0,
+        "positive_engagement_at": positive_engagement_at,
+        "offer_sent_at": offer_sent_at,
+        "contract_at": contract_at,
+        "skip_bad": bool(skip_bad),
+    }
 
 
 def get_contact(phone):
     if _using_postgres():
         conn = _pg_conn()
         cur = conn.cursor()
-        cur.execute("SELECT status, notes, tags, market, status_updated_at FROM contacts WHERE phone = %s", (phone,))
+        cur.execute(f"SELECT {SELECT_COLS} FROM contacts WHERE phone = %s", (phone,))
         row = cur.fetchone()
         cur.close()
         conn.close()
     else:
         conn = sqlite3.connect(SQLITE_PATH)
-        cur = conn.execute("SELECT status, notes, tags, market, status_updated_at FROM contacts WHERE phone = ?", (phone,))
+        cur = conn.execute(f"SELECT {SELECT_COLS} FROM contacts WHERE phone = ?", (phone,))
         row = cur.fetchone()
         conn.close()
 
     if not row:
         return dict(DEFAULT_RECORD)
-    status, notes, tags, market, status_updated_at = row
-    return {
-        "status": status,
-        "notes": notes,
-        "tags": json.loads(tags) if tags else [],
-        "market": market,
-        "statusUpdatedAt": status_updated_at or "",
-    }
+    return _row_to_record(row)
 
 
 def list_contacts():
-    """Returns all contact records, used for lead-count and status-history rollups."""
+    """All contacts on file, keyed by phone. Used for dashboard aggregation
+    (campaign attribution, revenue, velocity) independent of the SignalWire
+    message pull."""
     if _using_postgres():
         conn = _pg_conn()
         cur = conn.cursor()
-        cur.execute("SELECT phone, status, notes, tags, market, status_updated_at FROM contacts")
+        cur.execute(f"SELECT phone, {SELECT_COLS} FROM contacts")
         rows = cur.fetchall()
         cur.close()
         conn.close()
     else:
         conn = sqlite3.connect(SQLITE_PATH)
-        rows = conn.execute("SELECT phone, status, notes, tags, market, status_updated_at FROM contacts").fetchall()
+        rows = conn.execute(f"SELECT phone, {SELECT_COLS} FROM contacts").fetchall()
         conn.close()
-
-    return [
-        {
-            "phone": phone,
-            "status": status,
-            "notes": notes,
-            "tags": json.loads(tags) if tags else [],
-            "market": market,
-            "statusUpdatedAt": status_updated_at or "",
-        }
-        for phone, status, notes, tags, market, status_updated_at in rows
-    ]
+    return {r[0]: _row_to_record(r[1:]) for r in rows}
 
 
-def save_contact(phone, status=None, notes=None, tags=None, market=None):
+def save_contact(phone, status=None, notes=None, tags=None, market=None,
+                  campaign_id=_UNSET, revenue=None, positive_engagement_at=_UNSET,
+                  offer_sent_at=_UNSET, contract_at=_UNSET, skip_bad=None):
+    """Partial update. Plain fields (status/notes/tags/market/revenue/skip_bad)
+    keep their old value when left as None. The nullable timestamp/campaign
+    fields use the _UNSET sentinel so callers can explicitly clear them by
+    passing None or ''."""
     existing = get_contact(phone)
-    status_changed = status is not None and status != existing["status"]
+
+    def pick_clearable(new, old):
+        if new is _UNSET:
+            return old
+        if new in ("", None):
+            return None
+        return new
+
     merged = {
         "status": status if status is not None else existing["status"],
         "notes": notes if notes is not None else existing["notes"],
         "tags": tags if tags is not None else existing["tags"],
         "market": market if market is not None else existing["market"],
-        "statusUpdatedAt": _now_iso() if status_changed else (existing["statusUpdatedAt"] or _now_iso()),
+        "campaign_id": pick_clearable(campaign_id, existing["campaign_id"]),
+        "revenue": revenue if revenue is not None else existing["revenue"],
+        "positive_engagement_at": pick_clearable(positive_engagement_at, existing["positive_engagement_at"]),
+        "offer_sent_at": pick_clearable(offer_sent_at, existing["offer_sent_at"]),
+        "contract_at": pick_clearable(contract_at, existing["contract_at"]),
+        "skip_bad": skip_bad if skip_bad is not None else existing["skip_bad"],
     }
     tags_json = json.dumps(merged["tags"])
+    campaign_id_val = merged["campaign_id"]
+    skip_bad_val = bool(merged["skip_bad"])
 
     if _using_postgres():
         conn = _pg_conn()
         cur = conn.cursor()
         cur.execute("""
-            INSERT INTO contacts (phone, status, notes, tags, market, status_updated_at)
-            VALUES (%s, %s, %s, %s, %s, %s)
+            INSERT INTO contacts (phone, status, notes, tags, market, campaign_id, revenue,
+                positive_engagement_at, offer_sent_at, contract_at, skip_bad)
+            VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s)
             ON CONFLICT (phone) DO UPDATE SET
                 status = EXCLUDED.status,
                 notes = EXCLUDED.notes,
                 tags = EXCLUDED.tags,
                 market = EXCLUDED.market,
-                status_updated_at = EXCLUDED.status_updated_at
-        """, (phone, merged["status"], merged["notes"], tags_json, merged["market"], merged["statusUpdatedAt"]))
+                campaign_id = EXCLUDED.campaign_id,
+                revenue = EXCLUDED.revenue,
+                positive_engagement_at = EXCLUDED.positive_engagement_at,
+                offer_sent_at = EXCLUDED.offer_sent_at,
+                contract_at = EXCLUDED.contract_at,
+                skip_bad = EXCLUDED.skip_bad
+        """, (phone, merged["status"], merged["notes"], tags_json, merged["market"], campaign_id_val,
+              merged["revenue"], merged["positive_engagement_at"], merged["offer_sent_at"],
+              merged["contract_at"], skip_bad_val))
         conn.commit()
         cur.close()
         conn.close()
     else:
         conn = sqlite3.connect(SQLITE_PATH)
         conn.execute("""
-            INSERT INTO contacts (phone, status, notes, tags, market, status_updated_at)
-            VALUES (?, ?, ?, ?, ?, ?)
+            INSERT INTO contacts (phone, status, notes, tags, market, campaign_id, revenue,
+                positive_engagement_at, offer_sent_at, contract_at, skip_bad)
+            VALUES (?,?,?,?,?,?,?,?,?,?,?)
             ON CONFLICT (phone) DO UPDATE SET
                 status = excluded.status,
                 notes = excluded.notes,
                 tags = excluded.tags,
                 market = excluded.market,
-                status_updated_at = excluded.status_updated_at
-        """, (phone, merged["status"], merged["notes"], tags_json, merged["market"], merged["statusUpdatedAt"]))
+                campaign_id = excluded.campaign_id,
+                revenue = excluded.revenue,
+                positive_engagement_at = excluded.positive_engagement_at,
+                offer_sent_at = excluded.offer_sent_at,
+                contract_at = excluded.contract_at,
+                skip_bad = excluded.skip_bad
+        """, (phone, merged["status"], merged["notes"], tags_json, merged["market"], campaign_id_val,
+              merged["revenue"], merged["positive_engagement_at"], merged["offer_sent_at"],
+              merged["contract_at"], int(skip_bad_val)))
         conn.commit()
         conn.close()
 
