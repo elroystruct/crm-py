@@ -602,7 +602,8 @@ function renderCrmShell() {
   const statusEl = document.getElementById('statusFilters');
   STATUSES.forEach(s => {
     const label = document.createElement('label');
-    label.innerHTML = `<input type="checkbox" checked data-status="${s}" /> ${s}`;
+    const isChecked = state.statusFilters.has(s);
+    label.innerHTML = `<input type="checkbox" ${isChecked ? 'checked' : ''} data-status="${s}" /> ${s}`;
     statusEl.appendChild(label);
   });
   statusEl.querySelectorAll('input').forEach(cb => {
@@ -1299,7 +1300,9 @@ disconnectBtn.addEventListener('click', async () => {
   render();
 });
 refreshBtn.addEventListener('click', () => {
-  if (state.view === 'dashboard') loadDashboard(); else loadMessages();
+  if (state.view === 'dashboard') loadDashboard();
+  else if (state.view === 'campaigns') { loadCampaigns().then(renderCampaignsView); }
+  else loadMessages();
 });
 
 function render() {
