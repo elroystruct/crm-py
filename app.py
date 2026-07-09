@@ -159,24 +159,32 @@ def messages():
     inbound = [m for m in all_messages if (m.get("direction") or "").startswith("inbound")]
 
     enriched = []
+    skipped = 0
     for m in inbound:
-        phone = m.get("from")
-        crm = db.get_contact(phone)
-        enriched.append({
-            "sid": m.get("sid"),
-            "from": m.get("from"),
-            "to": m.get("to"),
-            "body": m.get("body"),
-            "dateSent": m.get("date_sent") or m.get("date_created"),
-            "numMedia": int(m.get("num_media") or 0),
-            "status": crm["status"],
-            "notes": crm["notes"],
-            "tags": crm["tags"],
-            "market": crm["market"],
-        })
+        try:
+            phone = m.get("from")
+            crm = db.get_contact(phone)
+            enriched.append({
+                "sid": m.get("sid"),
+                "from": phone,
+                "to": m.get("to"),
+                "body": m.get("body"),
+                "dateSent": m.get("date_sent") or m.get("date_created"),
+                "numMedia": int(m.get("num_media") or 0),
+                "status": crm["status"],
+                "notes": crm["notes"],
+                "tags": crm["tags"],
+                "market": crm["market"],
+            })
+        except Exception as e:
+            # One malformed record (odd MMS shape, missing field, etc.) should never take
+            # down the whole inbox. Skip it and keep going instead of 500ing the entire list.
+            skipped += 1
+            app.logger.warning(f"Skipped malformed message {m.get('sid')}: {e}")
+            continue
 
     enriched.sort(key=lambda m: m["dateSent"] or "", reverse=True)
-    return jsonify({"count": len(enriched), "messages": enriched})
+    return jsonify({"count": len(enriched), "messages": enriched, "skipped": skipped})
 
 
 # ---------- analytics ----------
