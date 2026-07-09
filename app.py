@@ -10,6 +10,8 @@ from dotenv import load_dotenv
 
 import db
 
+STOP_KEYWORDS = {"stop", "stopall", "unsubscribe", "cancel", "end", "quit", "optout", "opt out", "remove"}
+
 load_dotenv()
 
 app = Flask(__name__, static_folder="public", static_url_path="")
@@ -298,116 +300,6 @@ def analytics():
     })
 
 
-# ---------- daily ops dashboard ----------
-CARRIER_ERROR_LABELS = {
-    "30003": "Unreachable handset",
-    "30004": "Message blocked by carrier",
-    "30005": "Unknown destination handset",
-    "30006": "Landline or unreachable carrier",
-    "30007": "Carrier content filtering",
-    "30008": "Unknown carrier error",
-}
-OPT_OUT_KEYWORDS = {"stop", "end", "unsubscribe", "quit", "cancel", "remove", "stopall", "revoke"}
-
-
-@app.route("/api/ops")
-def ops():
-    if not creds_ready():
-        return jsonify({"error": "Not connected. Set your SignalWire Space, Project ID, and Auth Token first."}), 400
-
-    try:
-        all_messages, err = _fetch_all_messages()
-        if err:
-            return err
-    except Exception as e:
-        return jsonify({"error": f"Unexpected error pulling SignalWire log: {e}"}), 500
-
-    today = dt.datetime.now(dt.timezone.utc).date()
-
-    # Build a full outbound-by-phone index (not just today's) so we can tell whether
-    # a message received today has already been answered, even if the reply itself
-    # lands after midnight.
-    outbound_by_phone = {}
-    for m in all_messages:
-        if (m.get("direction") or "").startswith("inbound"):
-            continue
-        ts = _parse_ts(m.get("date_sent") or m.get("date_created"))
-        if ts is None:
-            continue
-        outbound_by_phone.setdefault(m.get("to"), []).append(ts)
-    for k in outbound_by_phone:
-        outbound_by_phone[k].sort()
-
-    outbound_today = []
-    inbound_today = []
-    for m in all_messages:
-        ts = _parse_ts(m.get("date_sent") or m.get("date_created"))
-        if ts is None or ts.date() != today:
-            continue
-        direction = m.get("direction") or ""
-        if direction.startswith("inbound"):
-            inbound_today.append({"phone": m.get("from"), "ts": ts, "body": (m.get("body") or "").strip().lower()})
-        else:
-            outbound_today.append({"status": m.get("status"), "error_code": m.get("error_code")})
-
-    total_sent_today = len(outbound_today)
-    delivered_today = sum(1 for m in outbound_today if m["status"] == "delivered")
-    delivery_rate_today = round(delivered_today / total_sent_today * 100, 1) if total_sent_today else 0.0
-
-    error_counts = {}
-    for m in outbound_today:
-        if m["status"] in ("failed", "undelivered") and m["error_code"]:
-            code = str(m["error_code"])
-            error_counts[code] = error_counts.get(code, 0) + 1
-    error_breakdown = [
-        {"code": code, "label": CARRIER_ERROR_LABELS.get(code, "Carrier error"), "count": count}
-        for code, count in sorted(error_counts.items(), key=lambda kv: -kv[1])
-    ]
-
-    total_replies_today = len(inbound_today)
-    opt_outs_today = sum(1 for m in inbound_today if m["body"] in OPT_OUT_KEYWORDS)
-    opt_out_rate_today = round(opt_outs_today / total_replies_today * 100, 1) if total_replies_today else 0.0
-
-    active_conversations = 0
-    seen_active_phones = set()
-    response_seconds_today = []
-    for m in inbound_today:
-        phone, ts = m["phone"], m["ts"]
-        candidates = outbound_by_phone.get(phone, [])
-        pos = bisect.bisect_right(candidates, ts)
-        if pos < len(candidates):
-            delta = (candidates[pos] - ts).total_seconds()
-            if delta >= 0:
-                response_seconds_today.append(delta)
-        elif phone not in seen_active_phones:
-            active_conversations += 1
-            seen_active_phones.add(phone)
-
-    avg_speed_to_lead_today = (
-        sum(response_seconds_today) / len(response_seconds_today) if response_seconds_today else None
-    )
-
-    contacts = db.list_contacts()
-    leads_today = sum(
-        1 for c in contacts
-        if c.get("status") == "qualified" and (c.get("statusUpdatedAt") or "").startswith(today.isoformat())
-    )
-
-    return jsonify({
-        "date": today.isoformat(),
-        "totalSentToday": total_sent_today,
-        "deliveredToday": delivered_today,
-        "deliveryRateToday": delivery_rate_today,
-        "errorBreakdown": error_breakdown,
-        "totalRepliesToday": total_replies_today,
-        "optOutsToday": opt_outs_today,
-        "optOutRateToday": opt_out_rate_today,
-        "activeConversations": active_conversations,
-        "avgSpeedToLeadToday": avg_speed_to_lead_today,
-        "leadsToday": leads_today,
-    })
-
-
 # ---------- send a message ----------
 @app.route("/api/send", methods=["POST"])
 def send_message():
@@ -453,6 +345,13 @@ def send_message():
 
 
 # ---------- contacts / leads ----------
+_MISSING = object()  # distinguishes "key not in JSON body" from "key explicitly set to null"
+
+
+def _from_body(body, key):
+    return body[key] if key in body else _MISSING
+
+
 @app.route("/api/contacts/<path:phone>", methods=["GET"])
 def get_contact_route(phone):
     return jsonify(db.get_contact(phone))
@@ -461,14 +360,322 @@ def get_contact_route(phone):
 @app.route("/api/contacts/<path:phone>", methods=["PUT"])
 def put_contact_route(phone):
     body = request.get_json(force=True, silent=True) or {}
-    record = db.save_contact(
-        phone,
+
+    kwargs = dict(
         status=body.get("status"),
         notes=body.get("notes"),
         tags=body.get("tags"),
         market=body.get("market"),
+        revenue=body.get("revenue"),
+        skip_bad=body.get("skipBad"),
     )
+    # Only pass the clearable fields through if the client actually sent them,
+    # so a PUT that only touches "notes" doesn't accidentally wipe a timestamp.
+    for json_key, kw in [
+        ("campaignId", "campaign_id"),
+        ("positiveEngagementAt", "positive_engagement_at"),
+        ("offerSentAt", "offer_sent_at"),
+        ("contractAt", "contract_at"),
+    ]:
+        val = _from_body(body, json_key)
+        if val is not _MISSING:
+            kwargs[kw] = val
+
+    record = db.save_contact(phone, **kwargs)
     return jsonify(record)
+
+
+# ---------- campaigns ----------
+@app.route("/api/campaigns", methods=["GET"])
+def list_campaigns_route():
+    return jsonify({"campaigns": db.list_campaigns()})
+
+
+@app.route("/api/campaigns", methods=["POST"])
+def create_campaign_route():
+    body = request.get_json(force=True, silent=True) or {}
+    name = (body.get("name") or "").strip()
+    if not name:
+        return jsonify({"error": "Campaign name is required."}), 400
+    try:
+        cost = float(body.get("cost") or 0)
+    except (TypeError, ValueError):
+        return jsonify({"error": "Cost must be a number."}), 400
+    campaign = db.create_campaign(
+        name=name,
+        market=(body.get("market") or "").strip(),
+        list_source=(body.get("listSource") or "").strip(),
+        cost=cost,
+    )
+    return jsonify(campaign), 201
+
+
+@app.route("/api/campaigns/<int:campaign_id>", methods=["PUT"])
+def update_campaign_route(campaign_id):
+    body = request.get_json(force=True, silent=True) or {}
+    cost = body.get("cost")
+    if cost is not None:
+        try:
+            cost = float(cost)
+        except (TypeError, ValueError):
+            return jsonify({"error": "Cost must be a number."}), 400
+    campaign = db.update_campaign(
+        campaign_id,
+        name=body.get("name"),
+        market=body.get("market"),
+        list_source=body.get("listSource"),
+        cost=cost,
+    )
+    if not campaign:
+        return jsonify({"error": "Campaign not found."}), 404
+    return jsonify(campaign)
+
+
+# ---------- dashboard (daily / weekly / monthly / all-time) ----------
+def _parse_iso(raw):
+    if not raw:
+        return None
+    try:
+        d = dt.datetime.fromisoformat(raw.replace("Z", "+00:00"))
+        if d.tzinfo is None:
+            d = d.replace(tzinfo=dt.timezone.utc)
+        return d.astimezone(dt.timezone.utc)
+    except Exception:
+        return None
+
+
+def _day_bounds(now):
+    start = now.replace(hour=0, minute=0, second=0, microsecond=0)
+    return start, start + dt.timedelta(days=1)
+
+
+def _week_bounds(now, weeks_ago=0):
+    today_start = now.replace(hour=0, minute=0, second=0, microsecond=0)
+    monday = today_start - dt.timedelta(days=today_start.weekday())
+    start = monday - dt.timedelta(weeks=weeks_ago)
+    return start, start + dt.timedelta(days=7)
+
+
+def _month_bounds(now):
+    start = now.replace(day=1, hour=0, minute=0, second=0, microsecond=0)
+    end = start.replace(year=start.year + 1, month=1) if start.month == 12 else start.replace(month=start.month + 1)
+    return start, end
+
+
+def _is_stop_message(body):
+    text = (body or "").strip().lower().strip(".!")
+    return text in STOP_KEYWORDS
+
+
+@app.route("/api/dashboard")
+def dashboard():
+    if not creds_ready():
+        return jsonify({"error": "Not connected. Set your SignalWire Space, Project ID, and Auth Token first."}), 400
+
+    try:
+        all_messages, err = _fetch_all_messages()
+        if err:
+            return err
+    except Exception as e:
+        return jsonify({"error": f"Unexpected error pulling SignalWire log: {e}"}), 500
+
+    contacts = db.list_contacts()
+    campaigns = {c["id"]: c for c in db.list_campaigns()}
+    now = dt.datetime.now(dt.timezone.utc)
+
+    # ---- normalize the SignalWire log ----
+    inbound, outbound = [], []
+    for m in all_messages:
+        ts = _parse_ts(m.get("date_sent") or m.get("date_created"))
+        if ts is None:
+            continue
+        direction = m.get("direction") or ""
+        row = {
+            "phone": m.get("from") if direction.startswith("inbound") else m.get("to"),
+            "ts": ts,
+            "body": m.get("body"),
+            "status": (m.get("status") or "").lower(),
+            "errorCode": m.get("error_code"),
+        }
+        (inbound if direction.startswith("inbound") else outbound).append(row)
+
+    outbound_by_phone = {}
+    for o in outbound:
+        outbound_by_phone.setdefault(o["phone"], []).append(o["ts"])
+    for k in outbound_by_phone:
+        outbound_by_phone[k].sort()
+
+    inbound_by_phone = {}
+    for i in inbound:
+        inbound_by_phone.setdefault(i["phone"], []).append(i["ts"])
+    for k in inbound_by_phone:
+        inbound_by_phone[k].sort()
+
+    def responded(phone, ts):
+        """Same "did this inbound get a reply" logic as /api/analytics."""
+        same_phone_inbound = inbound_by_phone.get(phone, [])
+        idx = bisect.bisect_right(same_phone_inbound, ts)
+        window_end = same_phone_inbound[idx] if idx < len(same_phone_inbound) else ts + dt.timedelta(hours=48)
+        candidates = outbound_by_phone.get(phone, [])
+        pos = bisect.bisect_right(candidates, ts)
+        return pos < len(candidates) and candidates[pos] <= window_end
+
+    # ================= DAILY =================
+    day_start, day_end = _day_bounds(now)
+    today_all = [m for m in (inbound + outbound) if day_start <= m["ts"] < day_end]
+    today_inbound = [m for m in inbound if day_start <= m["ts"] < day_end]
+
+    error_counts = {}
+    for m in today_all:
+        code = m.get("errorCode")
+        if code:
+            error_counts[str(code)] = error_counts.get(str(code), 0) + 1
+    carrier_errors = sorted(
+        [{"code": k, "count": v} for k, v in error_counts.items()], key=lambda x: -x["count"]
+    )
+
+    opt_out_count = sum(1 for m in today_inbound if _is_stop_message(m["body"]))
+    opt_out_ratio = round((opt_out_count / len(today_inbound) * 100), 1) if today_inbound else 0.0
+
+    def lead_to_offer_velocity(window_start=None, window_end=None):
+        hours = []
+        for phone, c in contacts.items():
+            pe, os_ = _parse_iso(c["positive_engagement_at"]), _parse_iso(c["offer_sent_at"])
+            if not pe or not os_ or os_ < pe:
+                continue
+            if window_start and not (window_start <= os_ < window_end):
+                continue
+            hours.append((os_ - pe).total_seconds() / 3600.0)
+        if not hours:
+            return {"avgHours": None, "medianHours": None, "count": 0}
+        s = sorted(hours)
+        n = len(s)
+        median = s[n // 2] if n % 2 else (s[n // 2 - 1] + s[n // 2]) / 2
+        return {"avgHours": round(sum(hours) / n, 1), "medianHours": round(median, 1), "count": n}
+
+    daily = {
+        "carrierErrors": carrier_errors,
+        "totalMessagesToday": len(today_all),
+        "optOutRatio": opt_out_ratio,
+        "optOutCount": opt_out_count,
+        "totalInboundToday": len(today_inbound),
+        "leadToOfferVelocity": lead_to_offer_velocity(day_start, day_end),
+        "leadToOfferVelocityAllTime": lead_to_offer_velocity(),
+    }
+
+    # ================= WEEKLY =================
+    phone_campaign = {phone: c.get("campaign_id") for phone, c in contacts.items()}
+
+    def campaign_response_rate(campaign_id, w_start, w_end):
+        phones = {p for p, cid in phone_campaign.items() if cid == campaign_id}
+        window_inbound = [m for m in inbound if m["phone"] in phones and w_start <= m["ts"] < w_end]
+        if not window_inbound:
+            return None, 0
+        got_reply = sum(1 for m in window_inbound if responded(m["phone"], m["ts"]))
+        return round(got_reply / len(window_inbound) * 100, 1), len(window_inbound)
+
+    this_week_start, this_week_end = _week_bounds(now, 0)
+    last_week_start, last_week_end = _week_bounds(now, 1)
+
+    list_fatigue = []
+    for cid, camp in campaigns.items():
+        this_rate, this_n = campaign_response_rate(cid, this_week_start, this_week_end)
+        last_rate, last_n = campaign_response_rate(cid, last_week_start, last_week_end)
+        if this_rate is None and last_rate is None:
+            continue
+        delta = None
+        fatigued = False
+        if this_rate is not None and last_rate is not None:
+            delta = round(this_rate - last_rate, 1)
+            fatigued = delta <= -15 and last_n >= 3
+        list_fatigue.append({
+            "campaignId": cid,
+            "name": camp["name"],
+            "market": camp["market"],
+            "thisWeekRate": this_rate,
+            "thisWeekInbound": this_n,
+            "lastWeekRate": last_rate,
+            "lastWeekInbound": last_n,
+            "delta": delta,
+            "fatigued": fatigued,
+        })
+    list_fatigue.sort(key=lambda x: (x["delta"] is None, x["delta"] if x["delta"] is not None else 0))
+
+    weekly = {"listFatigue": list_fatigue}
+
+    # ================= MONTHLY / ALL-TIME =================
+    month_start, month_end = _month_bounds(now)
+
+    def skip_trace_accuracy():
+        determined = [c for c in contacts.values() if c.get("campaign_id") is not None]
+        if not determined:
+            return None, 0, 0
+        bad = sum(1 for c in determined if c["skip_bad"])
+        good = len(determined) - bad
+        return round(good / len(determined) * 100, 1), good, len(determined)
+
+    accuracy_pct, accurate_count, determined_count = skip_trace_accuracy()
+
+    def cpl_by_source(w_start=None, w_end=None):
+        out = []
+        for cid, camp in campaigns.items():
+            leads = 0
+            for phone, c in contacts.items():
+                if c.get("campaign_id") != cid:
+                    continue
+                pe = _parse_iso(c["positive_engagement_at"])
+                if not pe:
+                    continue
+                if w_start and not (w_start <= pe < w_end):
+                    continue
+                leads += 1
+            cpl = round(camp["cost"] / leads, 2) if leads else None
+            out.append({
+                "campaignId": cid, "name": camp["name"], "market": camp["market"],
+                "cost": camp["cost"], "leads": leads, "cpl": cpl,
+            })
+        out.sort(key=lambda x: (x["cpl"] is None, x["cpl"] if x["cpl"] is not None else 0))
+        return out
+
+    def revenue_per_delivered_text(w_start=None, w_end=None):
+        total_revenue = 0.0
+        for c in contacts.values():
+            contract_ts = _parse_iso(c["contract_at"])
+            if not contract_ts:
+                continue
+            if w_start and not (w_start <= contract_ts < w_end):
+                continue
+            total_revenue += c.get("revenue") or 0.0
+
+        delivered = [m for m in outbound if m["status"] == "delivered"]
+        if w_start:
+            delivered = [m for m in delivered if w_start <= m["ts"] < w_end]
+        delivered_count = len(delivered)
+        per_text = round(total_revenue / delivered_count, 2) if delivered_count else None
+        return {"totalRevenue": round(total_revenue, 2), "deliveredCount": delivered_count, "revenuePerText": per_text}
+
+    monthly = {
+        "skipTraceAccuracy": accuracy_pct,
+        "skipTraceAccurateCount": accurate_count,
+        "skipTraceDeterminedCount": determined_count,
+        "cplBySource": cpl_by_source(month_start, month_end),
+        "revenuePerDeliveredText": revenue_per_delivered_text(month_start, month_end),
+    }
+    all_time = {
+        "skipTraceAccuracy": accuracy_pct,
+        "skipTraceAccurateCount": accurate_count,
+        "skipTraceDeterminedCount": determined_count,
+        "cplBySource": cpl_by_source(),
+        "revenuePerDeliveredText": revenue_per_delivered_text(),
+    }
+
+    return jsonify({
+        "daily": daily,
+        "weekly": weekly,
+        "monthly": monthly,
+        "allTime": all_time,
+        "campaigns": db.list_campaigns(),
+    })
 
 
 if __name__ == "__main__":
