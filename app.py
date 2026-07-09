@@ -606,15 +606,15 @@ def dashboard():
     # ================= MONTHLY / ALL-TIME =================
     month_start, month_end = _month_bounds(now)
 
-    def skip_trace_accuracy():
+    def skip_trace_accuracy(w_start=None, w_end=None):
         determined = [c for c in contacts.values() if c.get("campaign_id") is not None]
+        if w_start:
+            determined = [c for c in determined if (lambda ts: ts and w_start <= ts < w_end)(_parse_iso(c.get("updated_at")))]
         if not determined:
             return None, 0, 0
         bad = sum(1 for c in determined if c["skip_bad"])
         good = len(determined) - bad
         return round(good / len(determined) * 100, 1), good, len(determined)
-
-    accuracy_pct, accurate_count, determined_count = skip_trace_accuracy()
 
     def cpl_by_source(w_start=None, w_end=None):
         out = []
@@ -654,17 +654,20 @@ def dashboard():
         per_text = round(total_revenue / delivered_count, 2) if delivered_count else None
         return {"totalRevenue": round(total_revenue, 2), "deliveredCount": delivered_count, "revenuePerText": per_text}
 
+    monthly_accuracy_pct, monthly_accurate_count, monthly_determined_count = skip_trace_accuracy(month_start, month_end)
+    alltime_accuracy_pct, alltime_accurate_count, alltime_determined_count = skip_trace_accuracy()
+
     monthly = {
-        "skipTraceAccuracy": accuracy_pct,
-        "skipTraceAccurateCount": accurate_count,
-        "skipTraceDeterminedCount": determined_count,
+        "skipTraceAccuracy": monthly_accuracy_pct,
+        "skipTraceAccurateCount": monthly_accurate_count,
+        "skipTraceDeterminedCount": monthly_determined_count,
         "cplBySource": cpl_by_source(month_start, month_end),
         "revenuePerDeliveredText": revenue_per_delivered_text(month_start, month_end),
     }
     all_time = {
-        "skipTraceAccuracy": accuracy_pct,
-        "skipTraceAccurateCount": accurate_count,
-        "skipTraceDeterminedCount": determined_count,
+        "skipTraceAccuracy": alltime_accuracy_pct,
+        "skipTraceAccurateCount": alltime_accurate_count,
+        "skipTraceDeterminedCount": alltime_determined_count,
         "cplBySource": cpl_by_source(),
         "revenuePerDeliveredText": revenue_per_delivered_text(),
     }
