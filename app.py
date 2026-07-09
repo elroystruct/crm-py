@@ -298,6 +298,116 @@ def analytics():
     })
 
 
+# ---------- daily ops dashboard ----------
+CARRIER_ERROR_LABELS = {
+    "30003": "Unreachable handset",
+    "30004": "Message blocked by carrier",
+    "30005": "Unknown destination handset",
+    "30006": "Landline or unreachable carrier",
+    "30007": "Carrier content filtering",
+    "30008": "Unknown carrier error",
+}
+OPT_OUT_KEYWORDS = {"stop", "end", "unsubscribe", "quit", "cancel", "remove", "stopall", "revoke"}
+
+
+@app.route("/api/ops")
+def ops():
+    if not creds_ready():
+        return jsonify({"error": "Not connected. Set your SignalWire Space, Project ID, and Auth Token first."}), 400
+
+    try:
+        all_messages, err = _fetch_all_messages()
+        if err:
+            return err
+    except Exception as e:
+        return jsonify({"error": f"Unexpected error pulling SignalWire log: {e}"}), 500
+
+    today = dt.datetime.now(dt.timezone.utc).date()
+
+    # Build a full outbound-by-phone index (not just today's) so we can tell whether
+    # a message received today has already been answered, even if the reply itself
+    # lands after midnight.
+    outbound_by_phone = {}
+    for m in all_messages:
+        if (m.get("direction") or "").startswith("inbound"):
+            continue
+        ts = _parse_ts(m.get("date_sent") or m.get("date_created"))
+        if ts is None:
+            continue
+        outbound_by_phone.setdefault(m.get("to"), []).append(ts)
+    for k in outbound_by_phone:
+        outbound_by_phone[k].sort()
+
+    outbound_today = []
+    inbound_today = []
+    for m in all_messages:
+        ts = _parse_ts(m.get("date_sent") or m.get("date_created"))
+        if ts is None or ts.date() != today:
+            continue
+        direction = m.get("direction") or ""
+        if direction.startswith("inbound"):
+            inbound_today.append({"phone": m.get("from"), "ts": ts, "body": (m.get("body") or "").strip().lower()})
+        else:
+            outbound_today.append({"status": m.get("status"), "error_code": m.get("error_code")})
+
+    total_sent_today = len(outbound_today)
+    delivered_today = sum(1 for m in outbound_today if m["status"] == "delivered")
+    delivery_rate_today = round(delivered_today / total_sent_today * 100, 1) if total_sent_today else 0.0
+
+    error_counts = {}
+    for m in outbound_today:
+        if m["status"] in ("failed", "undelivered") and m["error_code"]:
+            code = str(m["error_code"])
+            error_counts[code] = error_counts.get(code, 0) + 1
+    error_breakdown = [
+        {"code": code, "label": CARRIER_ERROR_LABELS.get(code, "Carrier error"), "count": count}
+        for code, count in sorted(error_counts.items(), key=lambda kv: -kv[1])
+    ]
+
+    total_replies_today = len(inbound_today)
+    opt_outs_today = sum(1 for m in inbound_today if m["body"] in OPT_OUT_KEYWORDS)
+    opt_out_rate_today = round(opt_outs_today / total_replies_today * 100, 1) if total_replies_today else 0.0
+
+    active_conversations = 0
+    seen_active_phones = set()
+    response_seconds_today = []
+    for m in inbound_today:
+        phone, ts = m["phone"], m["ts"]
+        candidates = outbound_by_phone.get(phone, [])
+        pos = bisect.bisect_right(candidates, ts)
+        if pos < len(candidates):
+            delta = (candidates[pos] - ts).total_seconds()
+            if delta >= 0:
+                response_seconds_today.append(delta)
+        elif phone not in seen_active_phones:
+            active_conversations += 1
+            seen_active_phones.add(phone)
+
+    avg_speed_to_lead_today = (
+        sum(response_seconds_today) / len(response_seconds_today) if response_seconds_today else None
+    )
+
+    contacts = db.list_contacts()
+    leads_today = sum(
+        1 for c in contacts
+        if c.get("status") == "qualified" and (c.get("statusUpdatedAt") or "").startswith(today.isoformat())
+    )
+
+    return jsonify({
+        "date": today.isoformat(),
+        "totalSentToday": total_sent_today,
+        "deliveredToday": delivered_today,
+        "deliveryRateToday": delivery_rate_today,
+        "errorBreakdown": error_breakdown,
+        "totalRepliesToday": total_replies_today,
+        "optOutsToday": opt_outs_today,
+        "optOutRateToday": opt_out_rate_today,
+        "activeConversations": active_conversations,
+        "avgSpeedToLeadToday": avg_speed_to_lead_today,
+        "leadsToday": leads_today,
+    })
+
+
 # ---------- send a message ----------
 @app.route("/api/send", methods=["POST"])
 def send_message():
