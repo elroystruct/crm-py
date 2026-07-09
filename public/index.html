@@ -1,4 +1,3 @@
-
 <!DOCTYPE html>
 <html lang="en">
 <head>
@@ -464,6 +463,7 @@ function renderCrmShell() {
   app.innerHTML = `
     <div class="view-tabs">
       <button class="view-tab ${state.view === 'inbox' ? 'active' : ''}" id="tabInbox">Inbox</button>
+      <button class="view-tab ${state.view === 'ops' ? 'active' : ''}" id="tabOps">Daily ops</button>
       <button class="view-tab ${state.view === 'analytics' ? 'active' : ''}" id="tabAnalytics">Analytics</button>
     </div>
     <div class="layout" id="viewInbox" style="display:${state.view === 'inbox' ? 'grid' : 'none'};">
@@ -481,12 +481,16 @@ function renderCrmShell() {
         <div class="table-wrap" id="tableWrap"><div class="loading">Loading inbound messages...</div></div>
       </div>
     </div>
+    <div class="dash-wrap" id="viewOps" style="display:${state.view === 'ops' ? 'block' : 'none'};">
+      <div class="loading">Loading today's stats...</div>
+    </div>
     <div class="dash-wrap" id="viewAnalytics" style="display:${state.view === 'analytics' ? 'block' : 'none'};">
       <div class="loading">Loading analytics...</div>
     </div>
   `;
 
   document.getElementById('tabInbox').addEventListener('click', () => switchView('inbox'));
+  document.getElementById('tabOps').addEventListener('click', () => switchView('ops'));
   document.getElementById('tabAnalytics').addEventListener('click', () => switchView('analytics'));
 
   const statusEl = document.getElementById('statusFilters');
@@ -578,15 +582,86 @@ async function loadMessages() {
 function switchView(view) {
   state.view = view;
   const inboxEl = document.getElementById('viewInbox');
+  const opsEl = document.getElementById('viewOps');
   const analyticsEl = document.getElementById('viewAnalytics');
   const tabInbox = document.getElementById('tabInbox');
+  const tabOps = document.getElementById('tabOps');
   const tabAnalytics = document.getElementById('tabAnalytics');
-  if (!inboxEl || !analyticsEl) return;
+  if (!inboxEl || !opsEl || !analyticsEl) return;
   inboxEl.style.display = view === 'inbox' ? 'grid' : 'none';
+  opsEl.style.display = view === 'ops' ? 'block' : 'none';
   analyticsEl.style.display = view === 'analytics' ? 'block' : 'none';
   tabInbox.classList.toggle('active', view === 'inbox');
+  tabOps.classList.toggle('active', view === 'ops');
   tabAnalytics.classList.toggle('active', view === 'analytics');
+  if (view === 'ops') loadOps();
   if (view === 'analytics') loadAnalytics();
+}
+
+async function loadOps() {
+  const wrap = document.getElementById('viewOps');
+  if (!wrap) return;
+  wrap.innerHTML = `<div class="loading">Loading today's stats...</div>`;
+  try {
+    const r = await fetch('/api/ops');
+    const j = await r.json();
+    if (!r.ok) {
+      wrap.innerHTML = `<div class="empty">${j.error || 'Failed to load daily ops.'}</div>`;
+      return;
+    }
+    renderOps(j);
+  } catch (e) {
+    wrap.innerHTML = `<div class="empty">Network error reaching the server: ${e.message}</div>`;
+  }
+}
+
+function renderOps(o) {
+  const wrap = document.getElementById('viewOps');
+  if (!wrap) return;
+
+  const errorChart = o.errorBreakdown.length
+    ? renderBucketChart(o.errorBreakdown.map(e => ({ label: `${e.label} (${e.code})`, count: e.count })))
+    : `<div class="empty" style="padding:20px;">No delivery failures today.</div>`;
+
+  wrap.innerHTML = `
+    <div class="kpi-grid">
+      <div class="kpi-card">
+        <div class="label">Sent today</div>
+        <div class="value">${o.totalSentToday}</div>
+        <div class="sub">${o.deliveredToday} delivered</div>
+      </div>
+      <div class="kpi-card">
+        <div class="label">Delivery rate today</div>
+        <div class="value ${o.deliveryRateToday >= 90 ? 'accent' : ''}" style="${o.deliveryRateToday < 85 && o.totalSentToday > 0 ? 'color:var(--red);' : ''}">${o.deliveryRateToday}%</div>
+        <div class="sub">target 90%+</div>
+      </div>
+      <div class="kpi-card">
+        <div class="label">Active conversations</div>
+        <div class="value accent">${o.activeConversations}</div>
+        <div class="sub">inbound today awaiting a reply</div>
+      </div>
+      <div class="kpi-card">
+        <div class="label">Speed to lead today</div>
+        <div class="value">${fmtDuration(o.avgSpeedToLeadToday)}</div>
+        <div class="sub">target under 15m</div>
+      </div>
+      <div class="kpi-card">
+        <div class="label">Leads today</div>
+        <div class="value accent">${o.leadsToday}</div>
+        <div class="sub">marked qualified today</div>
+      </div>
+      <div class="kpi-card">
+        <div class="label">Opt-out rate today</div>
+        <div class="value" style="${o.optOutRateToday > 15 ? 'color:var(--red);' : ''}">${o.optOutRateToday}%</div>
+        <div class="sub">${o.optOutsToday} of ${o.totalRepliesToday} replies</div>
+      </div>
+    </div>
+    <div class="chart-card">
+      <h4>Carrier error breakdown, today</h4>
+      <div class="chart-note">Failed or undelivered sends today, grouped by carrier error code.</div>
+      ${errorChart}
+    </div>
+  `;
 }
 
 async function loadAnalytics() {
@@ -918,7 +993,9 @@ disconnectBtn.addEventListener('click', async () => {
   render();
 });
 refreshBtn.addEventListener('click', () => {
-  if (state.view === 'analytics') loadAnalytics(); else loadMessages();
+  if (state.view === 'analytics') loadAnalytics();
+  else if (state.view === 'ops') loadOps();
+  else loadMessages();
 });
 
 function render() {
