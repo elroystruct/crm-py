@@ -1,9 +1,10 @@
+
 <!DOCTYPE html>
 <html lang="en">
 <head>
 <meta charset="UTF-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-<title>Inbound: Zócalo Capital</title>
+<title>Inbound: SignalWire Lead Console</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;600;700&family=Inter:wght@400;500;600&display=swap" rel="stylesheet">
 <style>
@@ -467,7 +468,7 @@ const state = {
   analytics: null,
   campaigns: [],
   dashboard: null,
-  dashboardTier: 'daily'
+  dashboardTier: 'overview'
 };
 
 async function loadCampaigns() {
@@ -564,7 +565,6 @@ function renderCrmShell() {
   app.innerHTML = `
     <div class="view-tabs">
       <button class="view-tab ${state.view === 'inbox' ? 'active' : ''}" id="tabInbox">Inbox</button>
-      <button class="view-tab ${state.view === 'analytics' ? 'active' : ''}" id="tabAnalytics">Analytics</button>
       <button class="view-tab ${state.view === 'dashboard' ? 'active' : ''}" id="tabDashboard">Dashboard</button>
       <button class="view-tab ${state.view === 'campaigns' ? 'active' : ''}" id="tabCampaigns">Campaigns</button>
     </div>
@@ -583,9 +583,6 @@ function renderCrmShell() {
         <div class="table-wrap" id="tableWrap"><div class="loading">Loading inbound messages...</div></div>
       </div>
     </div>
-    <div class="dash-wrap" id="viewAnalytics" style="display:${state.view === 'analytics' ? 'block' : 'none'};">
-      <div class="loading">Loading analytics...</div>
-    </div>
     <div class="dash-wrap" id="viewDashboard" style="display:${state.view === 'dashboard' ? 'block' : 'none'};">
       <div class="loading">Loading dashboard...</div>
     </div>
@@ -595,7 +592,6 @@ function renderCrmShell() {
   `;
 
   document.getElementById('tabInbox').addEventListener('click', () => switchView('inbox'));
-  document.getElementById('tabAnalytics').addEventListener('click', () => switchView('analytics'));
   document.getElementById('tabDashboard').addEventListener('click', () => switchView('dashboard'));
   document.getElementById('tabCampaigns').addEventListener('click', () => switchView('campaigns'));
 
@@ -687,8 +683,8 @@ async function loadMessages() {
 
 function switchView(view) {
   state.view = view;
-  const views = { inbox: 'viewInbox', analytics: 'viewAnalytics', dashboard: 'viewDashboard', campaigns: 'viewCampaigns' };
-  const tabs = { inbox: 'tabInbox', analytics: 'tabAnalytics', dashboard: 'tabDashboard', campaigns: 'tabCampaigns' };
+  const views = { inbox: 'viewInbox', dashboard: 'viewDashboard', campaigns: 'viewCampaigns' };
+  const tabs = { inbox: 'tabInbox', dashboard: 'tabDashboard', campaigns: 'tabCampaigns' };
   Object.entries(views).forEach(([v, id]) => {
     const el = document.getElementById(id);
     if (el) el.style.display = v === view ? (v === 'inbox' ? 'grid' : 'block') : 'none';
@@ -697,43 +693,29 @@ function switchView(view) {
     const el = document.getElementById(id);
     if (el) el.classList.toggle('active', v === view);
   });
-  if (view === 'analytics') loadAnalytics();
   if (view === 'dashboard') loadDashboard();
   if (view === 'campaigns') renderCampaignsView();
 }
 
-async function loadAnalytics() {
-  const wrap = document.getElementById('viewAnalytics');
-  if (!wrap) return;
-  wrap.innerHTML = `<div class="loading">Pulling reply data from SignalWire...</div>`;
-  try {
-    const r = await fetch('/api/analytics');
-    const j = await r.json();
-    if (!r.ok) {
-      wrap.innerHTML = `<div class="empty">${j.error || 'Failed to load analytics.'}</div>`;
-      return;
-    }
-    state.analytics = j;
-    renderAnalytics(j);
-  } catch (e) {
-    wrap.innerHTML = `<div class="empty">Network error reaching the server: ${e.message}</div>`;
-  }
-}
-
-// ---------- Dashboard (Daily / Weekly / Monthly / All-Time) ----------
+// ---------- Dashboard (Overview / Daily / Weekly / Monthly / All-Time) ----------
 async function loadDashboard() {
   const wrap = document.getElementById('viewDashboard');
   if (!wrap) return;
   wrap.innerHTML = `<div class="loading">Pulling reply data from SignalWire...</div>`;
   try {
-    const r = await fetch('/api/dashboard');
-    const j = await r.json();
-    if (!r.ok) {
-      wrap.innerHTML = `<div class="empty">${j.error || 'Failed to load dashboard.'}</div>`;
+    const [dashRes, analyticsRes] = await Promise.all([
+      fetch('/api/dashboard'),
+      fetch('/api/analytics'),
+    ]);
+    const dashJson = await dashRes.json();
+    const analyticsJson = await analyticsRes.json();
+    if (!dashRes.ok) {
+      wrap.innerHTML = `<div class="empty">${dashJson.error || 'Failed to load dashboard.'}</div>`;
       return;
     }
-    state.dashboard = j;
-    state.campaigns = j.campaigns;
+    state.dashboard = dashJson;
+    state.campaigns = dashJson.campaigns;
+    state.analytics = analyticsRes.ok ? analyticsJson : null;
     renderDashboard();
   } catch (e) {
     wrap.innerHTML = `<div class="empty">Network error reaching the server: ${e.message}</div>`;
@@ -760,6 +742,7 @@ function renderDashboard() {
 
   wrap.innerHTML = `
     <div class="tier-tabs">
+      <button class="tier-tab ${tier==='overview'?'active':''}" data-tier="overview">Overview</button>
       <button class="tier-tab ${tier==='daily'?'active':''}" data-tier="daily">Daily</button>
       <button class="tier-tab ${tier==='weekly'?'active':''}" data-tier="weekly">Weekly</button>
       <button class="tier-tab ${tier==='monthly'?'active':''}" data-tier="monthly">Monthly</button>
@@ -772,6 +755,55 @@ function renderDashboard() {
   });
 
   const body = document.getElementById('tierBody');
+
+  if (tier === 'overview') {
+    const a = state.analytics;
+    if (!a || !a.totalInbound) {
+      body.innerHTML = `<div class="empty">No inbound messages yet to build analytics from.</div>`;
+    } else {
+      body.innerHTML = `
+        <div class="kpi-grid">
+          <div class="kpi-card">
+            <div class="label">Total inbound</div>
+            <div class="value">${a.totalInbound}</div>
+            <div class="sub">${a.totalOutbound} replies sent</div>
+          </div>
+          <div class="kpi-card">
+            <div class="label">Response rate</div>
+            <div class="value accent">${a.responseRate}%</div>
+            <div class="sub">${a.respondedCount} of ${a.totalInbound} leads replied to</div>
+          </div>
+          <div class="kpi-card">
+            <div class="label">Avg response time</div>
+            <div class="value">${fmtDuration(a.avgResponseSeconds)}</div>
+            <div class="sub">median ${fmtDuration(a.medianResponseSeconds)}</div>
+          </div>
+          <div class="kpi-card">
+            <div class="label">Best time to text</div>
+            <div class="value accent">${a.bestHour ? fmtHour(a.bestHour.hour) : 'N/A'}</div>
+            <div class="sub">${a.bestHour ? `${a.bestHour.rate}% response rate` : 'not enough data yet'}</div>
+          </div>
+        </div>
+        <div class="chart-card">
+          <h4>Response rate by hour of day</h4>
+          <div class="chart-note">UTC hour. Amber bar marks the highest-converting hour.</div>
+          ${renderHourlyChart(a.hourly, a.bestHour)}
+        </div>
+        <div class="chart-grid">
+          <div class="chart-card">
+            <h4>Response time distribution</h4>
+            <div class="chart-note">How long it took to get a reply out, across all inbound messages.</div>
+            ${renderBucketChart(a.responseBuckets)}
+          </div>
+          <div class="chart-card">
+            <h4>Daily volume</h4>
+            <div class="chart-note">Inbound (green) vs replies sent (blue), last 30 days.</div>
+            ${renderDailyChart(a.dailyVolume)}
+          </div>
+        </div>
+      `;
+    }
+  }
 
   if (tier === 'daily') {
     const dd = d.daily;
@@ -1040,58 +1072,6 @@ function renderDailyChart(daily) {
   return `<svg viewBox="0 0 ${w} ${h}" width="100%" height="${h}">${bars}</svg>`;
 }
 
-function renderAnalytics(a) {
-  const wrap = document.getElementById('viewAnalytics');
-  if (!wrap) return;
-
-  if (!a.totalInbound) {
-    wrap.innerHTML = `<div class="empty">No inbound messages yet to build analytics from.</div>`;
-    return;
-  }
-
-  wrap.innerHTML = `
-    <div class="kpi-grid">
-      <div class="kpi-card">
-        <div class="label">Total inbound</div>
-        <div class="value">${a.totalInbound}</div>
-        <div class="sub">${a.totalOutbound} replies sent</div>
-      </div>
-      <div class="kpi-card">
-        <div class="label">Response rate</div>
-        <div class="value accent">${a.responseRate}%</div>
-        <div class="sub">${a.respondedCount} of ${a.totalInbound} leads replied to</div>
-      </div>
-      <div class="kpi-card">
-        <div class="label">Avg response time</div>
-        <div class="value">${fmtDuration(a.avgResponseSeconds)}</div>
-        <div class="sub">median ${fmtDuration(a.medianResponseSeconds)}</div>
-      </div>
-      <div class="kpi-card">
-        <div class="label">Best time to text</div>
-        <div class="value accent">${a.bestHour ? fmtHour(a.bestHour.hour) : 'N/A'}</div>
-        <div class="sub">${a.bestHour ? `${a.bestHour.rate}% response rate` : 'not enough data yet'}</div>
-      </div>
-    </div>
-    <div class="chart-card">
-      <h4>Response rate by hour of day</h4>
-      <div class="chart-note">UTC hour. Amber bar marks the highest-converting hour.</div>
-      ${renderHourlyChart(a.hourly, a.bestHour)}
-    </div>
-    <div class="chart-grid">
-      <div class="chart-card">
-        <h4>Response time distribution</h4>
-        <div class="chart-note">How long it took to get a reply out, across all inbound messages.</div>
-        ${renderBucketChart(a.responseBuckets)}
-      </div>
-      <div class="chart-card">
-        <h4>Daily volume</h4>
-        <div class="chart-note">Inbound (green) vs replies sent (blue), last 30 days.</div>
-        ${renderDailyChart(a.dailyVolume)}
-      </div>
-    </div>
-  `;
-}
-
 async function openDrawer(phone) {
   state.activePhone = phone;
   const msgsForPhone = state.messages.filter(m => m.from === phone);
@@ -1315,7 +1295,7 @@ disconnectBtn.addEventListener('click', async () => {
   render();
 });
 refreshBtn.addEventListener('click', () => {
-  if (state.view === 'analytics') loadAnalytics(); else loadMessages();
+  if (state.view === 'dashboard') loadDashboard(); else loadMessages();
 });
 
 function render() {
