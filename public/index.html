@@ -473,6 +473,7 @@ const state = {
   analytics: null,
   campaigns: [],
   dashboard: null,
+  kpiPeriod: 'allTime',
   dashboardTier: 'overview'
 };
 
@@ -749,6 +750,7 @@ function renderDashboard() {
   wrap.innerHTML = `
     <div class="tier-tabs">
       <button class="tier-tab ${tier==='overview'?'active':''}" data-tier="overview">Overview</button>
+      <button class="tier-tab ${tier==='kpis'?'active':''}" data-tier="kpis">KPIs</button>
       <button class="tier-tab ${tier==='daily'?'active':''}" data-tier="daily">Daily</button>
       <button class="tier-tab ${tier==='weekly'?'active':''}" data-tier="weekly">Weekly</button>
       <button class="tier-tab ${tier==='monthly'?'active':''}" data-tier="monthly">Monthly</button>
@@ -809,6 +811,51 @@ function renderDashboard() {
         </div>
       `;
     }
+  }
+
+  if (tier === 'kpis') {
+    const k = d.kpis || {};
+    const period = state.kpiPeriod === 'monthly' ? (k.monthly || {}) : (k.allTime || {});
+    body.innerHTML = `
+      <div style="margin-bottom:12px;">
+        <button class="tier-tab ${state.kpiPeriod!=='monthly'?'active':''}" id="kpiAllTimeBtn">All-Time</button>
+        <button class="tier-tab ${state.kpiPeriod==='monthly'?'active':''}" id="kpiMonthlyBtn">This Month</button>
+      </div>
+      <div class="kpi-grid">
+        <div class="kpi-card">
+          <div class="label">Price per lead</div>
+          <div class="value accent">${fmtMoney(period.pricePerLead)}</div>
+          <div class="sub">${period.leads || 0} leads (positive engagement)</div>
+        </div>
+        <div class="kpi-card">
+          <div class="label">Price per contract</div>
+          <div class="value accent">${fmtMoney(period.pricePerContract)}</div>
+          <div class="sub">${period.contracts || 0} contract${period.contracts===1?'':'s'}</div>
+        </div>
+        <div class="kpi-card">
+          <div class="label">Texts sent / responses received</div>
+          <div class="value">${period.textsSent || 0} / ${period.responsesReceived || 0}</div>
+          <div class="sub">deliverability ${period.deliverabilityRate || 0}%</div>
+        </div>
+        <div class="kpi-card">
+          <div class="label">Response rate</div>
+          <div class="value ${period.responseRateIsGood ? 'accent' : ''}">${period.responseRate || 0}%</div>
+          <div class="sub">${period.responseRateIsGood ? 'above the 8% target' : 'below the 8% target'}</div>
+        </div>
+        <div class="kpi-card">
+          <div class="label">Offers sent</div>
+          <div class="value">${period.offers || 0}</div>
+          <div class="sub">positive response rate ${period.positiveResponseRate || 0}%</div>
+        </div>
+        <div class="kpi-card">
+          <div class="label">Qualified (appointment proxy)</div>
+          <div class="value">${period.appointmentsProxyQualifiedCount || 0}</div>
+          <div class="sub">no dedicated appointment field yet</div>
+        </div>
+      </div>
+    `;
+    document.getElementById('kpiAllTimeBtn')?.addEventListener('click', () => { state.kpiPeriod = 'allTime'; renderDashboard(); });
+    document.getElementById('kpiMonthlyBtn')?.addEventListener('click', () => { state.kpiPeriod = 'monthly'; renderDashboard(); });
   }
 
   if (tier === 'daily') {
