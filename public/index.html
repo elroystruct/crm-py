@@ -1,3 +1,4 @@
+
 <!DOCTYPE html>
 <html lang="en">
 <head>
@@ -637,7 +638,7 @@ function renderTable() {
   const filtered = state.messages.filter(m => {
     if (!state.statusFilters.has(m.status)) return false;
     if (state.filterText) {
-      const hay = `${m.from} ${m.body}`.toLowerCase();
+      const hay = `${m.from} ${m.name || ''} ${m.body}`.toLowerCase();
       if (!hay.includes(state.filterText)) return false;
     }
     return true;
@@ -651,7 +652,7 @@ function renderTable() {
   const rows = filtered.map(m => `
     <tr data-phone="${m.from}" data-sid="${m.sid}">
       <td class="time">${fmtTime(m.dateSent)}</td>
-      <td class="from">${m.from || 'N/A'}</td>
+      <td class="from">${m.name ? `<div>${m.name}</div><div style="color:var(--text-dim); font-size:11px;">${m.from || ''}</div>` : (m.from || 'N/A')}</td>
       <td class="body"><div>${m.market ? `<span style="color:var(--text-dim); font-family:var(--mono); font-size:11px;">${m.market}: </span>` : ''}</div><div class="preview">${(m.body || '').replace(/</g,'&lt;')}</div></td>
       <td><span class="${badgeClass(m.status)}">${m.status}</span></td>
     </tr>
