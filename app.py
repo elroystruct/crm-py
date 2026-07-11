@@ -3,9 +3,11 @@ import re
 import base64
 import json
 import bisect
+import secrets
 import datetime as dt
 from email.utils import parsedate_to_datetime
-from flask import Flask, request, jsonify, send_from_directory
+from flask import Flask, request, jsonify, send_from_directory, session
+from werkzeug.security import generate_password_hash, check_password_hash
 import requests
 from dotenv import load_dotenv
 
@@ -13,9 +15,22 @@ import db
 
 STOP_KEYWORDS = {"stop", "stopall", "unsubscribe", "cancel", "end", "quit", "optout", "opt out", "remove"}
 
+# The PIN Elroy hands out to anyone he wants to be able to create an account.
+# Not a secret meant to be rotated dynamically -- it's a one-time gate on
+# signup, checked alongside email/password.
+SIGNUP_PIN = "6146"
+
 load_dotenv()
 
 app = Flask(__name__, static_folder="public", static_url_path="")
+# SECRET_KEY should be set in the environment for production so sessions
+# survive a restart/redeploy. Falls back to a random key (sessions reset on
+# every restart) so local dev doesn't need any extra setup.
+app.secret_key = os.environ.get("SECRET_KEY") or secrets.token_hex(32)
+app.config.update(
+    SESSION_COOKIE_HTTPONLY=True,
+    SESSION_COOKIE_SAMESITE="Lax",
+)
 
 db.init_db()
 
@@ -30,6 +45,44 @@ def handle_uncaught_error(e):
     return jsonify({"error": f"Server error: {e}"}), 500
 
 
+# ---------- auth gate ----------
+# Every /api/* route requires a signed-in user except the auth routes
+# themselves. Login happens before the SignalWire connect step, not instead
+# of it -- signing in gets you into the app shell, connecting SignalWire is
+# a separate step after that.
+_PUBLIC_API_PATHS = {
+    "/api/auth/signup",
+    "/api/auth/login",
+    "/api/auth/logout",
+    "/api/auth/me",
+}
+
+
+@app.before_request
+def require_login():
+    path = request.path
+    if not path.startswith("/api/"):
+        return None
+    if path in _PUBLIC_API_PATHS:
+        return None
+    if not session.get("user_id"):
+        return jsonify({"error": "Not signed in."}), 401
+    return None
+
+
+def current_user():
+    uid = session.get("user_id")
+    if not uid:
+        return None
+    return db.get_user_by_id(uid)
+
+
+def public_user(u):
+    if not u:
+        return None
+    return {"id": u["id"], "email": u["email"], "name": u["name"], "avatar": u["avatar"]}
+
+
 # ---------- credential state (in-memory only, per process) ----------
 creds = {
     "space": os.environ.get("SIGNALWIRE_SPACE", ""),
@@ -41,6 +94,87 @@ creds = {
 
 def creds_ready():
     return bool(creds["space"] and creds["projectId"] and creds["authToken"])
+
+
+# ---------- auth routes ----------
+def _valid_email(email):
+    return bool(re.match(r"^[^@\s]+@[^@\s]+\.[^@\s]+$", email or ""))
+
+
+@app.route("/api/auth/signup", methods=["POST"])
+def auth_signup():
+    body = request.get_json(force=True, silent=True) or {}
+    name = (body.get("name") or "").strip()
+    email = (body.get("email") or "").strip().lower()
+    password = body.get("password") or ""
+    pin = (body.get("pin") or "").strip()
+
+    if not name or not email or not password:
+        return jsonify({"error": "Name, email, and password are all required."}), 400
+    if not _valid_email(email):
+        return jsonify({"error": "Enter a valid email address."}), 400
+    if len(password) < 6:
+        return jsonify({"error": "Password must be at least 6 characters."}), 400
+    if pin != SIGNUP_PIN:
+        return jsonify({"error": "That sign-up PIN isn't right. Request one from Elroy."}), 403
+    if db.get_user_by_email(email):
+        return jsonify({"error": "An account with that email already exists. Sign in instead."}), 409
+
+    user = db.create_user(email=email, password_hash=generate_password_hash(password), name=name)
+    session["user_id"] = user["id"]
+    return jsonify({"user": public_user(user)}), 201
+
+
+@app.route("/api/auth/login", methods=["POST"])
+def auth_login():
+    body = request.get_json(force=True, silent=True) or {}
+    email = (body.get("email") or "").strip().lower()
+    password = body.get("password") or ""
+
+    user = db.get_user_by_email(email)
+    if not user or not check_password_hash(user["passwordHash"], password):
+        return jsonify({"error": "Incorrect email or password."}), 401
+
+    session["user_id"] = user["id"]
+    return jsonify({"user": public_user(user)})
+
+
+@app.route("/api/auth/logout", methods=["POST"])
+def auth_logout():
+    session.clear()
+    return jsonify({"loggedOut": True})
+
+
+@app.route("/api/auth/me")
+def auth_me():
+    user = current_user()
+    if not user:
+        return jsonify({"user": None}), 200
+    return jsonify({"user": public_user(user)})
+
+
+@app.route("/api/auth/profile", methods=["PUT"])
+def auth_update_profile():
+    user = current_user()
+    body = request.get_json(force=True, silent=True) or {}
+    name = body.get("name")
+    avatar = db._UNSET if "avatar" not in body else body.get("avatar")
+    # A data-URL image is plenty for a small profile picture; cap it so a huge
+    # upload can't bloat the users table.
+    if avatar not in (db._UNSET, None) and len(avatar) > 700_000:
+        return jsonify({"error": "Image is too large. Try a smaller picture."}), 400
+    updated = db.update_user(user["id"], name=(name.strip() if name else None), avatar=avatar)
+    return jsonify({"user": public_user(updated)})
+
+
+@app.route("/api/auth/account", methods=["DELETE"])
+def auth_delete_account():
+    user = current_user()
+    db.delete_user(user["id"])
+    session.clear()
+    return jsonify({"deleted": True})
+
+
 
 
 def base_url():
