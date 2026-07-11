@@ -182,12 +182,15 @@ def messages():
                 # "dead" status filter checkbox is checked in the UI.
                 db.save_contact(phone, status="dead", skip_bad=True)
             crm = db.get_contact(phone)
+            pulled_name = name_by_phone.get(_norm_phone(phone))
+            if pulled_name and not crm.get("name"):
+                crm = db.save_contact(phone, name=pulled_name)
             raw_date = m.get("date_sent") or m.get("date_created")
             enriched.append({
                 "sid": m.get("sid"),
                 "from": phone,
                 "to": m.get("to"),
-                "name": name_by_phone.get(_norm_phone(phone)),
+                "name": crm.get("name") or pulled_name,
                 "body": m.get("body"),
                 "dateSent": raw_date,
                 "_sortTs": _parse_ts(raw_date),
@@ -506,11 +509,14 @@ def _is_stop_message(body):
 # Matches the opener of our outbound cold-text template:
 #   "Hey, " + firstName + " I'm Elroy with Zocalo, ..."
 # Anchor = "Hey, " up to the next space; that's the name.
-_NAME_RE = re.compile(r"^\s*Hey,\s+([A-Za-z'\-]+)\s", re.IGNORECASE)
+# Matches the opener of our outbound cold-text template:
+#   "Hey, " + firstName + " I'm Elroy with Zocalo, ..."
+# Anchors: starts right after "Hey," and ends right before " I'm" (handles curly apostrophe too).
+_NAME_RE = re.compile(r"Hey,\s*([A-Za-z'\-]+)\s+I['\u2019]?m\b", re.IGNORECASE)
 
 
 def _extract_first_name(body):
-    m = _NAME_RE.match(body or "")
+    m = _NAME_RE.search(body or "")
     return m.group(1) if m else None
 
 
