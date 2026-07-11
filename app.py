@@ -19,6 +19,17 @@ app = Flask(__name__, static_folder="public", static_url_path="")
 
 db.init_db()
 
+
+@app.errorhandler(Exception)
+def handle_uncaught_error(e):
+    """Without this, an unhandled exception falls through to Flask's default
+    HTML error page. The frontend does response.json() on every fetch, so an
+    HTML page shows up client-side as a cryptic 'Unexpected token <' instead
+    of the actual problem. Always return JSON so the real error is visible."""
+    app.logger.exception("Unhandled error")
+    return jsonify({"error": f"Server error: {e}"}), 500
+
+
 # ---------- credential state (in-memory only, per process) ----------
 creds = {
     "space": os.environ.get("SIGNALWIRE_SPACE", ""),
@@ -174,17 +185,21 @@ def messages():
 
     enriched = []
     skipped = 0
+    contacts_cache = db.list_contacts()  # one query instead of one per message
     for m in inbound:
         try:
             phone = m.get("from")
+            crm = contacts_cache.get(phone) or dict(db.DEFAULT_RECORD)
             if _is_stop_message(m.get("body")):
                 # STOP/END-type reply -> disqualify the lead. Still shown if the
                 # "dead" status filter checkbox is checked in the UI.
-                db.save_contact(phone, status="dead", skip_bad=True)
-            crm = db.get_contact(phone)
+                if crm["status"] != "dead" or not crm["skip_bad"]:
+                    crm = db.save_contact(phone, status="dead", skip_bad=True)
+                    contacts_cache[phone] = crm
             pulled_name = name_by_phone.get(_norm_phone(phone))
             if pulled_name and not crm.get("name"):
                 crm = db.save_contact(phone, name=pulled_name)
+                contacts_cache[phone] = crm
             raw_date = m.get("date_sent") or m.get("date_created")
             enriched.append({
                 "sid": m.get("sid"),
