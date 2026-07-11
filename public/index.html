@@ -413,10 +413,16 @@
   .drawer {
     position: fixed; top: 0; right: -420px; width: 420px; height: 100vh;
     background: var(--panel); border-left: 1px solid var(--border);
-    z-index: 11; transition: right 0.2s ease; padding: 22px;
+    z-index: 11; transition: right 0.2s ease, width 0.2s ease;
     overflow-y: auto;
   }
   .drawer.open { right: 0; }
+  .drawer.wide { width: 420px; padding: 0; }
+  .drawer:not(.wide) { padding: 22px; }
+  @media (min-width: 860px) {
+    .drawer.wide { width: 860px; right: -860px; }
+    .drawer.wide.open { right: 0; }
+  }
   .drawer h3 { font-family: var(--mono); margin: 0 0 4px; font-size: 16px; }
   .drawer .sub { color: var(--text-muted); font-size: 12px; margin-bottom: 18px; font-family: var(--mono); }
   .drawer .msg-box {
@@ -427,8 +433,83 @@
   .drawer .close-x {
     position: absolute; top: 20px; right: 20px; cursor: pointer; color: var(--text-muted);
     font-family: var(--mono); font-size: 13px; background: none; border: none;
+    z-index: 2;
   }
   .drawer .close-x:hover { color: var(--text); }
+
+  /* ---------- chat-style lead view ---------- */
+  .lead-view {
+    display: flex; flex-direction: column; height: 100vh;
+  }
+  @media (min-width: 860px) {
+    .lead-view { flex-direction: row; }
+  }
+  .lead-chat-col {
+    display: flex; flex-direction: column;
+    flex: 1 1 auto; min-width: 0; height: 55vh;
+    border-bottom: 1px solid var(--border);
+  }
+  @media (min-width: 860px) {
+    .lead-chat-col { height: 100vh; border-bottom: none; border-right: 1px solid var(--border); }
+  }
+  .lead-chat-header {
+    padding: 18px 20px 14px; border-bottom: 1px solid var(--border);
+    display: flex; align-items: center; justify-content: space-between; gap: 10px;
+    flex: 0 0 auto;
+  }
+  .lead-chat-header h3 { font-family: var(--mono); margin: 0 0 3px; font-size: 15px; }
+  .lead-chat-header .sub { color: var(--text-muted); font-size: 11.5px; font-family: var(--mono); }
+  .lead-chat-thread {
+    flex: 1 1 auto; overflow-y: auto; padding: 18px 20px;
+    display: flex; flex-direction: column; gap: 10px;
+    background: var(--bg);
+  }
+  .chat-day-sep {
+    text-align: center; color: var(--text-dim); font-family: var(--mono);
+    font-size: 10.5px; text-transform: uppercase; letter-spacing: 0.06em;
+    margin: 10px 0 4px;
+  }
+  .chat-row { display: flex; }
+  .chat-row.out { justify-content: flex-end; }
+  .chat-row.in { justify-content: flex-start; }
+  .chat-bubble {
+    max-width: 78%; padding: 9px 13px; border-radius: 14px; font-size: 13.5px;
+    line-height: 1.45; white-space: pre-wrap; word-wrap: break-word;
+    position: relative;
+  }
+  .chat-row.in .chat-bubble {
+    background: var(--panel-alt); border: 1px solid var(--border); color: var(--text);
+    border-bottom-left-radius: 4px;
+  }
+  .chat-row.out .chat-bubble {
+    background: var(--accent); color: #06110B;
+    border-bottom-right-radius: 4px;
+  }
+  .chat-meta {
+    font-family: var(--mono); font-size: 10px; color: var(--text-dim);
+    margin-top: 3px; display: flex; gap: 6px; align-items: center;
+  }
+  .chat-row.out .chat-meta { justify-content: flex-end; }
+  .chat-meta .fail { color: var(--red); }
+  .lead-chat-empty {
+    color: var(--text-muted); font-family: var(--mono); font-size: 12px;
+    text-align: center; margin: auto;
+  }
+  .lead-chat-composer {
+    flex: 0 0 auto; border-top: 1px solid var(--border); padding: 12px 20px;
+    background: var(--panel);
+  }
+  .lead-chat-composer .row { display: flex; gap: 8px; align-items: flex-end; }
+  .lead-chat-composer textarea {
+    flex: 1; min-height: 40px; max-height: 120px; resize: none; margin: 0;
+  }
+  .lead-chat-composer .btn { flex: 0 0 auto; padding: 10px 16px; }
+  .lead-detail-col {
+    flex: 0 0 auto; width: 100%; overflow-y: auto; padding: 20px;
+  }
+  @media (min-width: 860px) {
+    .lead-detail-col { width: 340px; }
+  }
   .tag-row { display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 14px; }
   .tag-chip {
     font-family: var(--mono); font-size: 11px; background: var(--panel-alt);
@@ -1125,11 +1206,151 @@ function renderDailyChart(daily) {
   return `<svg viewBox="0 0 ${w} ${h}" width="100%" height="${h}">${bars}</svg>`;
 }
 
+function fmtChatTime(iso) {
+  const d = new Date(iso);
+  if (isNaN(d)) return '';
+  return d.toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' });
+}
+function fmtChatDay(iso) {
+  const d = new Date(iso);
+  if (isNaN(d)) return '';
+  const today = new Date();
+  const isToday = d.toDateString() === today.toDateString();
+  if (isToday) return 'Today';
+  const yest = new Date(today); yest.setDate(yest.getDate() - 1);
+  if (d.toDateString() === yest.toDateString()) return 'Yesterday';
+  return d.toLocaleDateString([], { month: 'short', day: 'numeric', year: d.getFullYear() !== today.getFullYear() ? 'numeric' : undefined });
+}
+
+function renderChatThread(thread) {
+  if (!thread.length) {
+    return `<div class="lead-chat-empty">No messages on file yet.</div>`;
+  }
+  let html = '';
+  let lastDay = null;
+  thread.forEach(m => {
+    const day = fmtChatDay(m.dateSent);
+    if (day !== lastDay) {
+      html += `<div class="chat-day-sep">${day}</div>`;
+      lastDay = day;
+    }
+    const isOut = m.direction === 'outbound';
+    const failed = ['failed', 'undelivered'].includes(m.status);
+    html += `
+      <div class="chat-row ${isOut ? 'out' : 'in'}">
+        <div>
+          <div class="chat-bubble">${(m.body || '').replace(/</g,'&lt;')}</div>
+          <div class="chat-meta">
+            <span>${fmtChatTime(m.dateSent)}</span>
+            ${isOut ? `<span class="${failed ? 'fail' : ''}">${failed ? (m.errorCode ? `failed (${m.errorCode})` : 'failed') : (m.status || 'sent')}</span>` : ''}
+          </div>
+        </div>
+      </div>
+    `;
+  });
+  return html;
+}
+
 async function openDrawer(phone) {
   state.activePhone = phone;
+  drawer.classList.add('wide');
+
   const msgsForPhone = state.messages.filter(m => m.from === phone);
-  const latest = msgsForPhone[0];
+  const leadName = msgsForPhone.find(m => m.name)?.name || '';
+
+  drawerContent.innerHTML = `
+    <div class="lead-view">
+      <div class="lead-chat-col">
+        <div class="lead-chat-header">
+          <div>
+            <h3>${leadName ? `${leadName} <span style="color:var(--text-muted); font-weight:400;">· ${phone}</span>` : phone}</h3>
+            <div class="sub">${msgsForPhone.length} inbound message${msgsForPhone.length === 1 ? '' : 's'} on file</div>
+          </div>
+        </div>
+        <div class="lead-chat-thread" id="chatThread">
+          <div class="lead-chat-empty">Loading conversation…</div>
+        </div>
+        <div class="lead-chat-composer">
+          ${state.fromNumber ? '' : `
+          <div class="field" style="margin-bottom:8px;">
+            <input type="text" id="replyFrom" placeholder="From number, e.g. +15555550123" />
+          </div>`}
+          <div class="row">
+            <textarea id="replyBody" placeholder="Message ${leadName || phone}..."></textarea>
+            <button class="btn primary" id="sendReplyBtn">Send</button>
+          </div>
+          <div id="sendStatus" style="font-family:var(--mono); font-size:11px; margin-top:6px;"></div>
+        </div>
+      </div>
+      <div class="lead-detail-col" id="leadDetailCol"></div>
+    </div>
+  `;
+
+  overlay.classList.add('open');
+  drawer.classList.add('open');
+
+  loadLeadDetail(phone);
+  loadConversation(phone);
+
+  const sendBtn = document.getElementById('sendReplyBtn');
+  sendBtn.onclick = async () => {
+    const bodyEl = document.getElementById('replyBody');
+    const body = bodyEl.value.trim();
+    const fromEl = document.getElementById('replyFrom');
+    const from = fromEl ? fromEl.value.trim() : state.fromNumber;
+    const statusEl = document.getElementById('sendStatus');
+    if (!body) {
+      statusEl.style.color = 'var(--red)';
+      statusEl.textContent = 'Type a message first.';
+      return;
+    }
+    if (!from) {
+      statusEl.style.color = 'var(--red)';
+      statusEl.textContent = 'Enter a From number to send.';
+      return;
+    }
+    sendBtn.disabled = true;
+    statusEl.style.color = 'var(--text-muted)';
+    statusEl.textContent = 'Sending...';
+    const r = await fetch('/api/send', {
+      method: 'POST', headers: {'Content-Type':'application/json'},
+      body: JSON.stringify({ to: phone, body, from })
+    });
+    const j = await r.json();
+    sendBtn.disabled = false;
+    if (!r.ok) {
+      statusEl.style.color = 'var(--red)';
+      statusEl.textContent = j.error || 'Send failed.';
+      return;
+    }
+    statusEl.style.color = 'var(--accent)';
+    statusEl.textContent = `Sent (${j.status || 'queued'}).`;
+    bodyEl.value = '';
+    loadConversation(phone);
+  };
+}
+
+async function loadConversation(phone) {
+  const threadEl = document.getElementById('chatThread');
+  try {
+    const r = await fetch(`/api/conversation/${encodeURIComponent(phone)}`);
+    const j = await r.json();
+    if (state.activePhone !== phone || !threadEl) return;
+    if (!r.ok) {
+      threadEl.innerHTML = `<div class="lead-chat-empty" style="color:var(--red);">${(j.error || 'Could not load conversation.').replace(/</g,'&lt;')}</div>`;
+      return;
+    }
+    threadEl.innerHTML = renderChatThread(j.messages || []);
+    threadEl.scrollTop = threadEl.scrollHeight;
+  } catch (e) {
+    if (threadEl) threadEl.innerHTML = `<div class="lead-chat-empty" style="color:var(--red);">Could not load conversation.</div>`;
+  }
+}
+
+async function loadLeadDetail(phone) {
+  const col = document.getElementById('leadDetailCol');
   const rec = await (await fetch(`/api/contacts/${encodeURIComponent(phone)}`)).json();
+  if (state.activePhone !== phone || !col) return;
 
   const toLocalInput = (iso) => {
     if (!iso) return '';
@@ -1140,10 +1361,7 @@ async function openDrawer(phone) {
   };
   const fromLocalInput = (val) => val ? new Date(val).toISOString() : '';
 
-  drawerContent.innerHTML = `
-    <h3>${phone}</h3>
-    <div class="sub">${msgsForPhone.length} inbound message${msgsForPhone.length === 1 ? '' : 's'} on file</div>
-    <div class="msg-box">${(latest.body || '').replace(/</g,'&lt;')}</div>
+  col.innerHTML = `
     <div class="field">
       <label>Status</label>
       <select id="statusSelect">
@@ -1189,21 +1407,7 @@ async function openDrawer(phone) {
       </div>
     </div>
 
-    <button class="btn primary" id="saveContactBtn" style="width:100%;">Save</button>
-
-    <div style="margin-top:24px; padding-top:20px; border-top:1px solid var(--border);">
-      <div class="field">
-        <label>Reply to ${phone}</label>
-        <textarea id="replyBody" placeholder="Type a reply..."></textarea>
-      </div>
-      ${state.fromNumber ? '' : `
-      <div class="field">
-        <label>From number (none set globally, enter one to send)</label>
-        <input type="text" id="replyFrom" placeholder="+15555550123" />
-      </div>`}
-      <button class="btn" id="sendReplyBtn" style="width:100%;">Send</button>
-      <div id="sendStatus" style="font-family:var(--mono); font-size:12px; margin-top:8px;"></div>
-    </div>
+    <button class="btn primary" id="saveContactBtn" style="width:100%; margin-top:6px;">Save</button>
   `;
 
   document.getElementById('saveContactBtn').onclick = async () => {
@@ -1230,49 +1434,11 @@ async function openDrawer(phone) {
     renderTable();
     closeDrawer();
   };
-
-  const sendBtn = document.getElementById('sendReplyBtn');
-  if (sendBtn) {
-    sendBtn.onclick = async () => {
-      const body = document.getElementById('replyBody').value.trim();
-      const fromEl = document.getElementById('replyFrom');
-      const from = fromEl ? fromEl.value.trim() : state.fromNumber;
-      const statusEl = document.getElementById('sendStatus');
-      if (!body) {
-        statusEl.style.color = 'var(--red)';
-        statusEl.textContent = 'Type a message first.';
-        return;
-      }
-      if (!from) {
-        statusEl.style.color = 'var(--red)';
-        statusEl.textContent = 'Enter a From number to send.';
-        return;
-      }
-      sendBtn.disabled = true;
-      statusEl.style.color = 'var(--text-muted)';
-      statusEl.textContent = 'Sending...';
-      const r = await fetch('/api/send', {
-        method: 'POST', headers: {'Content-Type':'application/json'},
-        body: JSON.stringify({ to: phone, body, from })
-      });
-      const j = await r.json();
-      sendBtn.disabled = false;
-      if (!r.ok) {
-        statusEl.style.color = 'var(--red)';
-        statusEl.textContent = j.error || 'Send failed.';
-        return;
-      }
-      statusEl.style.color = 'var(--accent)';
-      statusEl.textContent = `Sent (${j.status || 'queued'}).`;
-      document.getElementById('replyBody').value = '';
-    };
-  }
-
-  overlay.classList.add('open');
-  drawer.classList.add('open');
 }
 
 function openComposeDrawer() {
+  state.activePhone = null;
+  drawer.classList.remove('wide');
   drawerContent.innerHTML = `
     <h3>New message</h3>
     <div class="sub">${state.fromNumber ? `Sending from ${state.fromNumber}` : 'No From Number set globally, enter one below'}</div>
@@ -1338,6 +1504,8 @@ function openComposeDrawer() {
 function closeDrawer() {
   overlay.classList.remove('open');
   drawer.classList.remove('open');
+  drawer.classList.remove('wide');
+  state.activePhone = null;
 }
 overlay.addEventListener('click', closeDrawer);
 drawerClose.addEventListener('click', closeDrawer);
