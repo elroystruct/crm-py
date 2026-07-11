@@ -160,17 +160,17 @@ def messages():
     inbound = [m for m in all_messages if (m.get("direction") or "").startswith("inbound")]
 
     # Seller first name isn't stored anywhere; pull it out of our own outbound
-    # opener ("Hey, {firstName} I'm Elroy...") and key it by phone number.
+    # opener ("Hey, {firstName} I'm Elroy...") and key it by normalized phone.
     name_by_phone = {}
     for m in all_messages:
         if (m.get("direction") or "").startswith("inbound"):
             continue
-        phone = m.get("to")
-        if phone in name_by_phone:
+        phone_key = _norm_phone(m.get("to"))
+        if not phone_key or phone_key in name_by_phone:
             continue
         name = _extract_first_name(m.get("body"))
         if name:
-            name_by_phone[phone] = name
+            name_by_phone[phone_key] = name
 
     enriched = []
     skipped = 0
@@ -187,7 +187,7 @@ def messages():
                 "sid": m.get("sid"),
                 "from": phone,
                 "to": m.get("to"),
-                "name": name_by_phone.get(phone),
+                "name": name_by_phone.get(_norm_phone(phone)),
                 "body": m.get("body"),
                 "dateSent": raw_date,
                 "_sortTs": _parse_ts(raw_date),
@@ -505,13 +505,18 @@ def _is_stop_message(body):
 
 # Matches the opener of our outbound cold-text template:
 #   "Hey, " + firstName + " I'm Elroy with Zocalo, ..."
-# The name is whatever sits between "Hey, " and the next space.
-_NAME_RE = re.compile(r"^\s*Hey,\s+([A-Za-z'\-]+)\b")
+# Anchor = "Hey, " up to the next space; that's the name.
+_NAME_RE = re.compile(r"^\s*Hey,\s+([A-Za-z'\-]+)\s", re.IGNORECASE)
 
 
 def _extract_first_name(body):
     m = _NAME_RE.match(body or "")
     return m.group(1) if m else None
+
+
+def _norm_phone(phone):
+    """Digits-only so '+1 (555) 123-4567' and '15551234567' compare equal."""
+    return re.sub(r"\D", "", phone or "")
 
 
 @app.route("/api/dashboard")
