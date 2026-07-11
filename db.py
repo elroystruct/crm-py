@@ -33,6 +33,7 @@ DEFAULT_RECORD = {
     "contract_at": None,
     "skip_bad": False,
     "updated_at": None,
+    "name": None,
 }
 
 
@@ -93,6 +94,7 @@ def init_db():
         _add_column_if_missing(cur, "contacts", "contract_at", "TEXT", True)
         _add_column_if_missing(cur, "contacts", "skip_bad", "BOOLEAN NOT NULL DEFAULT FALSE", True)
         _add_column_if_missing(cur, "contacts", "updated_at", "TEXT", True)
+        _add_column_if_missing(cur, "contacts", "name", "TEXT", True)
         conn.commit()
         cur.close()
         conn.close()
@@ -133,6 +135,8 @@ def init_db():
             _add_column_if_missing(conn, "contacts", "skip_bad", "INTEGER NOT NULL DEFAULT 0", False)
         if "updated_at" not in existing_cols:
             _add_column_if_missing(conn, "contacts", "updated_at", "TEXT", False)
+        if "name" not in existing_cols:
+            _add_column_if_missing(conn, "contacts", "name", "TEXT", False)
         conn.commit()
         conn.close()
 
@@ -222,12 +226,12 @@ def update_campaign(campaign_id, name=None, market=None, list_source=None, cost=
 
 
 # ---------- contacts ----------
-SELECT_COLS = "status, notes, tags, market, campaign_id, revenue, positive_engagement_at, offer_sent_at, contract_at, skip_bad, updated_at"
+SELECT_COLS = "status, notes, tags, market, campaign_id, revenue, positive_engagement_at, offer_sent_at, contract_at, skip_bad, updated_at, name"
 
 
 def _row_to_record(row):
     (status, notes, tags, market, campaign_id, revenue,
-     positive_engagement_at, offer_sent_at, contract_at, skip_bad, updated_at) = row
+     positive_engagement_at, offer_sent_at, contract_at, skip_bad, updated_at, name) = row
     return {
         "status": status,
         "notes": notes,
@@ -240,6 +244,7 @@ def _row_to_record(row):
         "contract_at": contract_at,
         "skip_bad": bool(skip_bad),
         "updated_at": updated_at,
+        "name": name,
     }
 
 
@@ -282,11 +287,15 @@ def list_contacts():
 
 def save_contact(phone, status=None, notes=None, tags=None, market=None,
                   campaign_id=_UNSET, revenue=None, positive_engagement_at=_UNSET,
-                  offer_sent_at=_UNSET, contract_at=_UNSET, skip_bad=None):
-    """Partial update. Plain fields (status/notes/tags/market/revenue/skip_bad)
+                  offer_sent_at=_UNSET, contract_at=_UNSET, skip_bad=None, name=None):
+    """Partial update. Plain fields (status/notes/tags/market/revenue/skip_bad/name)
     keep their old value when left as None. The nullable timestamp/campaign
     fields use the _UNSET sentinel so callers can explicitly clear them by
-    passing None or ''."""
+    passing None or ''.
+
+    `name` never overwrites a manually-entered name with a blank: once set,
+    it only changes if a caller passes a new non-empty value.
+    """
     existing = get_contact(phone)
 
     def pick_clearable(new, old):
@@ -307,6 +316,7 @@ def save_contact(phone, status=None, notes=None, tags=None, market=None,
         "offer_sent_at": pick_clearable(offer_sent_at, existing["offer_sent_at"]),
         "contract_at": pick_clearable(contract_at, existing["contract_at"]),
         "skip_bad": skip_bad if skip_bad is not None else existing["skip_bad"],
+        "name": name if name else existing["name"],
     }
     merged["updated_at"] = now_iso()
     tags_json = json.dumps(merged["tags"])
@@ -319,8 +329,8 @@ def save_contact(phone, status=None, notes=None, tags=None, market=None,
         cur = conn.cursor()
         cur.execute("""
             INSERT INTO contacts (phone, status, notes, tags, market, campaign_id, revenue,
-                positive_engagement_at, offer_sent_at, contract_at, skip_bad, updated_at)
-            VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s)
+                positive_engagement_at, offer_sent_at, contract_at, skip_bad, updated_at, name)
+            VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s)
             ON CONFLICT (phone) DO UPDATE SET
                 status = EXCLUDED.status,
                 notes = EXCLUDED.notes,
@@ -332,10 +342,11 @@ def save_contact(phone, status=None, notes=None, tags=None, market=None,
                 offer_sent_at = EXCLUDED.offer_sent_at,
                 contract_at = EXCLUDED.contract_at,
                 skip_bad = EXCLUDED.skip_bad,
-                updated_at = EXCLUDED.updated_at
+                updated_at = EXCLUDED.updated_at,
+                name = EXCLUDED.name
         """, (phone, merged["status"], merged["notes"], tags_json, merged["market"], campaign_id_val,
               merged["revenue"], merged["positive_engagement_at"], merged["offer_sent_at"],
-              merged["contract_at"], skip_bad_val, updated_at_val))
+              merged["contract_at"], skip_bad_val, updated_at_val, merged["name"]))
         conn.commit()
         cur.close()
         conn.close()
@@ -343,8 +354,8 @@ def save_contact(phone, status=None, notes=None, tags=None, market=None,
         conn = sqlite3.connect(SQLITE_PATH)
         conn.execute("""
             INSERT INTO contacts (phone, status, notes, tags, market, campaign_id, revenue,
-                positive_engagement_at, offer_sent_at, contract_at, skip_bad, updated_at)
-            VALUES (?,?,?,?,?,?,?,?,?,?,?,?)
+                positive_engagement_at, offer_sent_at, contract_at, skip_bad, updated_at, name)
+            VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?)
             ON CONFLICT (phone) DO UPDATE SET
                 status = excluded.status,
                 notes = excluded.notes,
@@ -356,10 +367,11 @@ def save_contact(phone, status=None, notes=None, tags=None, market=None,
                 offer_sent_at = excluded.offer_sent_at,
                 contract_at = excluded.contract_at,
                 skip_bad = excluded.skip_bad,
-                updated_at = excluded.updated_at
+                updated_at = excluded.updated_at,
+                name = excluded.name
         """, (phone, merged["status"], merged["notes"], tags_json, merged["market"], campaign_id_val,
               merged["revenue"], merged["positive_engagement_at"], merged["offer_sent_at"],
-              merged["contract_at"], int(skip_bad_val), updated_at_val))
+              merged["contract_at"], int(skip_bad_val), updated_at_val, merged["name"]))
         conn.commit()
         conn.close()
 
