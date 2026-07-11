@@ -532,6 +532,93 @@ def update_campaign_route(campaign_id):
     return jsonify(campaign)
 
 
+# ---------- settings (SignalWire per-message SMS cost rates) ----------
+@app.route("/api/settings", methods=["GET"])
+def get_settings_route():
+    return jsonify(db.get_settings())
+
+
+@app.route("/api/settings", methods=["PUT"])
+def put_settings_route():
+    body = request.get_json(force=True, silent=True) or {}
+    try:
+        outbound = float(body["smsCostOutbound"]) if "smsCostOutbound" in body else None
+        inbound = float(body["smsCostInbound"]) if "smsCostInbound" in body else None
+    except (TypeError, ValueError):
+        return jsonify({"error": "SMS costs must be numbers."}), 400
+    return jsonify(db.save_settings(sms_cost_outbound=outbound, sms_cost_inbound=inbound))
+
+
+# ---------- opt-outs (STOP replies) ----------
+@app.route("/api/opt-outs")
+def opt_outs():
+    """Numbers that have ever sent a STOP-type reply, pulled straight from the
+    SignalWire log (source of truth) rather than the local 'dead' status,
+    since a lead can be marked dead for reasons other than opting out."""
+    if not creds_ready():
+        return jsonify({"error": "Not connected. Set your SignalWire Space, Project ID, and Auth Token first."}), 400
+
+    try:
+        all_messages, err = _fetch_all_messages()
+        if err:
+            return err
+    except Exception as e:
+        return jsonify({"error": f"Unexpected error pulling SignalWire log: {e}"}), 500
+
+    seen = {}
+    for m in all_messages:
+        if not (m.get("direction") or "").startswith("inbound"):
+            continue
+        if not _is_stop_message(m.get("body")):
+            continue
+        phone = m.get("from")
+        key = _norm_phone(phone)
+        if not key:
+            continue
+        ts = _parse_ts(m.get("date_sent") or m.get("date_created"))
+        if key not in seen or (ts and (seen[key][1] is None or ts > seen[key][1])):
+            seen[key] = (phone, ts)
+
+    phones = sorted(seen.values(), key=lambda x: (x[1] is None, x[1]), reverse=True)
+    return jsonify({
+        "count": len(phones),
+        "phones": [{"phone": p, "dateSent": ts.isoformat() if ts else None} for p, ts in phones],
+    })
+
+
+@app.route("/api/opt-outs/export")
+def opt_outs_export():
+    if not creds_ready():
+        return jsonify({"error": "Not connected. Set your SignalWire Space, Project ID, and Auth Token first."}), 400
+
+    try:
+        all_messages, err = _fetch_all_messages()
+        if err:
+            return err
+    except Exception as e:
+        return jsonify({"error": f"Unexpected error pulling SignalWire log: {e}"}), 500
+
+    seen = {}
+    for m in all_messages:
+        if not (m.get("direction") or "").startswith("inbound"):
+            continue
+        if not _is_stop_message(m.get("body")):
+            continue
+        phone = m.get("from")
+        key = _norm_phone(phone)
+        if key:
+            seen[key] = phone
+
+    lines = sorted(seen.values())
+    body = "\n".join(lines) + ("\n" if lines else "")
+    filename = f"opt_outs_{dt.datetime.now(dt.timezone.utc).strftime('%Y%m%d_%H%M%S')}.txt"
+    return app.response_class(
+        body,
+        mimetype="text/plain",
+        headers={"Content-Disposition": f"attachment; filename={filename}"},
+    )
+
+
 # ---------- dashboard (daily / weekly / monthly / all-time) ----------
 def _parse_iso(raw):
     if not raw:
@@ -587,6 +674,28 @@ def _norm_phone(phone):
     return re.sub(r"\D", "", phone or "")
 
 
+# GSM-7 charset covers standard SMS characters; anything outside it forces
+# UCS-2 encoding, which halves the per-segment character budget. This is an
+# approximation of SignalWire/carrier segmentation, close enough for cost
+# estimates without needing a full GSM-7 table.
+_GSM7_RE = re.compile(
+    r"^[@£$¥èéùìòÇ\nØø\rÅåΔ_ΦΓΛΩΠΨΣΘΞÆæßÉ !\"#¤%&'()*+,\-./0-9:;<=>?"
+    r"A-Z¡ÄÖÑÜ§¿a-zäöñüà\^{}\\\[~\]|€]*$"
+)
+
+
+def _sms_segments(body):
+    text = body or ""
+    length = len(text)
+    if length == 0:
+        return 1
+    is_gsm7 = bool(_GSM7_RE.match(text))
+    single_limit, multi_limit = (160, 153) if is_gsm7 else (70, 67)
+    if length <= single_limit:
+        return 1
+    return -(-length // multi_limit)  # ceil division
+
+
 @app.route("/api/dashboard")
 def dashboard():
     if not creds_ready():
@@ -601,6 +710,7 @@ def dashboard():
 
     contacts = db.list_contacts()
     campaigns = {c["id"]: c for c in db.list_campaigns()}
+    sms_rates = db.get_settings()
     now = dt.datetime.now(dt.timezone.utc)
 
     # ---- normalize the SignalWire log ----
@@ -616,8 +726,17 @@ def dashboard():
             "body": m.get("body"),
             "status": (m.get("status") or "").lower(),
             "errorCode": m.get("error_code"),
+            "segments": _sms_segments(m.get("body")),
         }
         (inbound if direction.startswith("inbound") else outbound).append(row)
+
+    def messaging_cost(rows, rate, w_start=None, w_end=None):
+        """Real SignalWire 10DLC messaging spend: segments x per-segment rate,
+        optionally windowed to a date range."""
+        return round(sum(
+            r["segments"] * rate for r in rows if not w_start or w_start <= r["ts"] < w_end
+        ), 2)
+
 
     outbound_by_phone = {}
     for o in outbound:
@@ -740,19 +859,29 @@ def dashboard():
         out = []
         for cid, camp in campaigns.items():
             leads = 0
+            phones_in_campaign = set()
             for phone, c in contacts.items():
                 if c.get("campaign_id") != cid:
                     continue
+                phones_in_campaign.add(phone)
                 pe = _parse_iso(c["positive_engagement_at"])
                 if not pe:
                     continue
                 if w_start and not (w_start <= pe < w_end):
                     continue
                 leads += 1
-            cpl = round(camp["cost"] / leads, 2) if leads else None
+            camp_outbound = [m for m in outbound if m["phone"] in phones_in_campaign]
+            camp_inbound = [m for m in inbound if m["phone"] in phones_in_campaign]
+            msg_cost = (
+                messaging_cost(camp_outbound, sms_rates["sms_cost_outbound"], w_start, w_end) +
+                messaging_cost(camp_inbound, sms_rates["sms_cost_inbound"], w_start, w_end)
+            )
+            total_cost = round((camp["cost"] or 0) + msg_cost, 2)
+            cpl = round(total_cost / leads, 2) if leads else None
             out.append({
                 "campaignId": cid, "name": camp["name"], "market": camp["market"],
-                "cost": camp["cost"], "leads": leads, "cpl": cpl,
+                "listCost": camp["cost"], "messagingCost": msg_cost, "cost": total_cost,
+                "leads": leads, "cpl": cpl,
             })
         out.sort(key=lambda x: (x["cpl"] is None, x["cpl"] if x["cpl"] is not None else 0))
         return out
@@ -811,7 +940,11 @@ def dashboard():
         leads = count_dated_field("positive_engagement_at", w_start, w_end)  # "$/lead" = fully-loaded cost per qualified lead
         offers = count_dated_field("offer_sent_at", w_start, w_end)
         contracts_n = count_dated_field("contract_at", w_start, w_end)
-        total_cost = sum(camp["cost"] or 0 for camp in campaigns.values())  # not time-sliced; campaign spend has no per-day breakdown
+        list_cost = sum(camp["cost"] or 0 for camp in campaigns.values())  # not time-sliced; campaign spend has no per-day breakdown
+        outbound_msg_cost = messaging_cost(outbound, sms_rates["sms_cost_outbound"], w_start, w_end)
+        inbound_msg_cost = messaging_cost(inbound, sms_rates["sms_cost_inbound"], w_start, w_end)
+        messaging_total = round(outbound_msg_cost + inbound_msg_cost, 2)
+        total_cost = round(list_cost + messaging_total, 2)
 
         response_rate = round(responses_received / texts_sent * 100, 1) if texts_sent else 0.0
         return {
@@ -824,6 +957,11 @@ def dashboard():
             "leads": leads,
             "offers": offers,
             "contracts": contracts_n,
+            "listCost": round(list_cost, 2),
+            "messagingCost": messaging_total,
+            "outboundMessagingCost": round(outbound_msg_cost, 2),
+            "inboundMessagingCost": round(inbound_msg_cost, 2),
+            "totalCost": total_cost,
             "pricePerLead": round(total_cost / leads, 2) if leads else None,
             "pricePerContract": round(total_cost / contracts_n, 2) if contracts_n else None,
             "costPerContract": round(total_cost / contracts_n, 2) if contracts_n else None,
@@ -844,6 +982,7 @@ def dashboard():
         "allTime": all_time,
         "kpis": kpis,
         "campaigns": db.list_campaigns(),
+        "smsRates": sms_rates,
     })
 
 
