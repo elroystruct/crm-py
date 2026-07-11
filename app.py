@@ -235,6 +235,51 @@ def messages():
     return jsonify({"count": len(enriched), "messages": enriched, "skipped": skipped})
 
 
+# ---------- single-lead conversation (chat view) ----------
+@app.route("/api/conversation/<path:phone>")
+def conversation(phone):
+    """Full two-way message history with one lead, sorted oldest -> newest,
+    for the chat-style lead detail view."""
+    if not creds_ready():
+        return jsonify({"error": "Not connected. Set your SignalWire Space, Project ID, and Auth Token first."}), 400
+
+    try:
+        all_messages, err = _fetch_all_messages()
+        if err:
+            return err
+    except Exception as e:
+        return jsonify({"error": f"Unexpected error pulling SignalWire log: {e}"}), 500
+
+    target = _norm_phone(phone)
+    thread = []
+    for m in all_messages:
+        direction = m.get("direction") or ""
+        is_inbound = direction.startswith("inbound")
+        other_party = m.get("from") if is_inbound else m.get("to")
+        if _norm_phone(other_party) != target:
+            continue
+        raw_date = m.get("date_sent") or m.get("date_created")
+        thread.append({
+            "sid": m.get("sid"),
+            "direction": "inbound" if is_inbound else "outbound",
+            "from": m.get("from"),
+            "to": m.get("to"),
+            "body": m.get("body"),
+            "status": (m.get("status") or "").lower(),
+            "errorCode": m.get("error_code"),
+            "dateSent": raw_date,
+            "numMedia": int(m.get("num_media") or 0),
+            "_sortTs": _parse_ts(raw_date),
+        })
+
+    epoch = dt.datetime(1970, 1, 1, tzinfo=dt.timezone.utc)
+    thread.sort(key=lambda m: m["_sortTs"] or epoch)
+    for m in thread:
+        del m["_sortTs"]
+
+    return jsonify({"phone": phone, "count": len(thread), "messages": thread})
+
+
 # ---------- analytics ----------
 @app.route("/api/analytics")
 def analytics():
