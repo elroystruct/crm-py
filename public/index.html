@@ -4,7 +4,7 @@
 <head>
 <meta charset="UTF-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-<title>Inbound: Zócalo Capital Lead Console</title>
+<title>Zócalo Capital CRM</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;600;700&family=Inter:wght@400;500;600&display=swap" rel="stylesheet">
 <style>
@@ -376,6 +376,60 @@
   .footer-bar .btn.small { padding: 5px 12px; }
   #optOutCount { color: var(--red); font-weight: 700; }
 
+  /* ---------- account card ---------- */
+  .account-card { position: relative; margin-left: 4px; }
+  .account-trigger {
+    display: flex; align-items: center; gap: 8px; cursor: pointer;
+    padding: 4px 8px 4px 4px; border-radius: 20px; border: 1px solid transparent;
+  }
+  .account-trigger:hover { border-color: var(--border); background: var(--panel-alt); }
+  .avatar {
+    width: 26px; height: 26px; border-radius: 50%; flex: 0 0 auto;
+    background: var(--accent); color: #06110B; font-family: var(--mono); font-weight: 700;
+    font-size: 11px; display: flex; align-items: center; justify-content: center;
+    overflow: hidden; text-transform: uppercase;
+  }
+  .avatar img { width: 100%; height: 100%; object-fit: cover; }
+  .account-text { line-height: 1.2; text-align: left; }
+  .account-greeting { font-size: 9px; color: var(--text-dim); text-transform: uppercase; letter-spacing: 0.06em; font-family: var(--mono); }
+  .account-name { font-size: 12px; color: var(--text); font-weight: 600; max-width: 110px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .account-menu {
+    display: none; position: absolute; top: 42px; right: 0; min-width: 190px;
+    background: var(--panel); border: 1px solid var(--border); border-radius: 8px;
+    box-shadow: 0 8px 24px rgba(0,0,0,0.3); z-index: 20; overflow: hidden;
+  }
+  .account-menu.open { display: block; }
+  .account-menu-item {
+    padding: 10px 14px; font-size: 12.5px; color: var(--text); cursor: pointer;
+    border-bottom: 1px solid var(--border); font-family: var(--sans);
+  }
+  .account-menu-item:last-child { border-bottom: none; }
+  .account-menu-item:hover { background: var(--panel-alt); }
+  .account-menu-item.danger { color: var(--red); }
+
+  /* ---------- auth (login / signup) ---------- */
+  .auth-shell {
+    height: 100%; display: flex; align-items: center; justify-content: center;
+    background: var(--bg);
+  }
+  .auth-card {
+    width: 100%; max-width: 380px; background: var(--panel); border: 1px solid var(--border);
+    border-radius: 12px; padding: 32px 28px;
+  }
+  .auth-brand { text-align: center; margin-bottom: 22px; }
+  .auth-brand .dot { display: inline-block; width: 8px; height: 8px; border-radius: 50%; background: var(--accent); margin-right: 8px; }
+  .auth-brand .name { font-family: var(--mono); font-weight: 700; letter-spacing: 0.02em; font-size: 15px; color: var(--text); }
+  .auth-brand .sub { font-family: var(--mono); font-size: 10.5px; color: var(--text-muted); text-transform: uppercase; letter-spacing: 0.1em; margin-top: 4px; }
+  .auth-tabs { display: flex; margin-bottom: 20px; border: 1px solid var(--border); border-radius: 8px; overflow: hidden; }
+  .auth-tab {
+    flex: 1; text-align: center; padding: 9px; font-family: var(--mono); font-size: 12px;
+    color: var(--text-muted); cursor: pointer; background: var(--panel-alt);
+  }
+  .auth-tab.active { background: var(--accent); color: #06110B; font-weight: 600; }
+  .auth-card .field { margin-bottom: 12px; }
+  .auth-card .btn.primary { width: 100%; padding: 10px; margin-top: 6px; }
+  .auth-hint { color: var(--text-dim); font-size: 11px; margin: -6px 0 12px; font-family: var(--mono); line-height: 1.5; }
+
   .chart-grid {
     display: grid;
     grid-template-columns: 1fr 1fr;
@@ -533,20 +587,36 @@
 </head>
 <body>
 
-<div class="topbar">
-  <div class="brand"><span class="dot"></span>INBOUND<small>SignalWire Lead Console</small></div>
+<div class="topbar" id="topbarEl">
+  <div class="brand"><span class="dot"></span>ZÓCALO CAPITAL<small>CRM</small></div>
   <div class="conn">
     <div class="signal-bars" id="signalBars"><div class="bar"></div><div class="bar"></div><div class="bar"></div><div class="bar"></div></div>
     <span id="connLabel">not connected</span>
     <button class="theme-toggle" id="themeToggle" title="Toggle light/dark mode">◐</button>
     <button class="btn small" id="disconnectBtn" style="display:none;">Disconnect</button>
     <button class="btn small primary" id="refreshBtn" style="display:none;">Refresh</button>
+    <div class="account-card" id="accountCard" style="display:none;">
+      <div class="account-trigger" id="accountTrigger">
+        <div class="avatar" id="accountAvatar"></div>
+        <div class="account-text">
+          <div class="account-greeting">Welcome</div>
+          <div class="account-name" id="accountName"></div>
+        </div>
+      </div>
+      <div class="account-menu" id="accountMenu">
+        <label class="account-menu-item" for="avatarFileInput">Change profile picture</label>
+        <input type="file" id="avatarFileInput" accept="image/*" style="display:none;" />
+        <div class="account-menu-item" id="removeAvatarItem">Remove profile picture</div>
+        <div class="account-menu-item" id="logoutItem">Log out</div>
+        <div class="account-menu-item danger" id="deleteAccountItem">Delete account</div>
+      </div>
+    </div>
   </div>
 </div>
 
 <div id="app"></div>
 
-<div class="footer-bar">
+<div class="footer-bar" id="footerBarEl">
   <span id="optOutStatus"></span>
   <button class="btn small" id="optOutsBtn">Opt-outs (<span id="optOutCount">0</span>)</button>
 </div>
@@ -562,6 +632,7 @@
 const STATUSES = ['new','contacted','qualified','contract','dead'];
 
 const state = {
+  user: null,
   connected: false,
   messages: [],
   filterText: '',
@@ -631,6 +702,169 @@ async function checkStatus() {
   const j = await r.json();
   setConnected(j.connected, j.space, j.fromNumber);
   render();
+}
+
+// ---------- auth (login / signup) ----------
+const topbarEl = document.getElementById('topbarEl');
+const footerBarEl = document.getElementById('footerBarEl');
+const accountCard = document.getElementById('accountCard');
+const accountAvatar = document.getElementById('accountAvatar');
+const accountName = document.getElementById('accountName');
+const accountTrigger = document.getElementById('accountTrigger');
+const accountMenu = document.getElementById('accountMenu');
+
+function initials(name) {
+  const parts = (name || '').trim().split(/\s+/).filter(Boolean);
+  if (!parts.length) return '?';
+  return (parts[0][0] + (parts[1] ? parts[1][0] : '')).toUpperCase();
+}
+
+function renderAvatar(el, user) {
+  el.innerHTML = user && user.avatar
+    ? `<img src="${user.avatar}" alt="" />`
+    : initials(user ? user.name : '');
+}
+
+function renderAccountCard() {
+  if (!state.user) { accountCard.style.display = 'none'; return; }
+  accountCard.style.display = 'block';
+  renderAvatar(accountAvatar, state.user);
+  accountName.textContent = (state.user.name || '').split(' ')[0] || state.user.email;
+}
+
+accountTrigger.addEventListener('click', (e) => {
+  e.stopPropagation();
+  accountMenu.classList.toggle('open');
+});
+document.addEventListener('click', () => accountMenu.classList.remove('open'));
+
+document.getElementById('avatarFileInput').addEventListener('change', async (e) => {
+  const file = e.target.files[0];
+  if (!file) return;
+  if (file.size > 500 * 1024) {
+    alert('Please choose an image under 500KB.');
+    e.target.value = '';
+    return;
+  }
+  const dataUrl = await new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = () => resolve(reader.result);
+    reader.onerror = reject;
+    reader.readAsDataURL(file);
+  });
+  const r = await fetch('/api/auth/profile', {
+    method: 'PUT', headers: {'Content-Type':'application/json'},
+    body: JSON.stringify({ avatar: dataUrl })
+  });
+  const j = await r.json();
+  if (r.ok) { state.user = j.user; renderAccountCard(); }
+  accountMenu.classList.remove('open');
+  e.target.value = '';
+});
+
+document.getElementById('removeAvatarItem').addEventListener('click', async () => {
+  const r = await fetch('/api/auth/profile', {
+    method: 'PUT', headers: {'Content-Type':'application/json'},
+    body: JSON.stringify({ avatar: null })
+  });
+  const j = await r.json();
+  if (r.ok) { state.user = j.user; renderAccountCard(); }
+  accountMenu.classList.remove('open');
+});
+
+document.getElementById('logoutItem').addEventListener('click', async () => {
+  await fetch('/api/auth/logout', { method: 'POST' });
+  state.user = null;
+  accountMenu.classList.remove('open');
+  await fetch('/api/disconnect', { method: 'POST' });
+  init();
+});
+
+document.getElementById('deleteAccountItem').addEventListener('click', async () => {
+  if (!confirm('Delete your account? This cannot be undone.')) return;
+  await fetch('/api/auth/account', { method: 'DELETE' });
+  state.user = null;
+  accountMenu.classList.remove('open');
+  init();
+});
+
+function renderAuthGate(mode, errorMsg) {
+  topbarEl.style.display = 'none';
+  footerBarEl.style.display = 'none';
+  app.style.height = '100vh';
+  const isSignup = mode === 'signup';
+  app.innerHTML = `
+    <div class="auth-shell">
+      <div class="auth-card">
+        <div class="auth-brand">
+          <div><span class="dot"></span><span class="name">ZÓCALO CAPITAL</span></div>
+          <div class="sub">CRM</div>
+        </div>
+        <div class="auth-tabs">
+          <div class="auth-tab ${!isSignup ? 'active' : ''}" id="tabSignIn">Sign in</div>
+          <div class="auth-tab ${isSignup ? 'active' : ''}" id="tabSignUp">Create account</div>
+        </div>
+        ${isSignup ? `
+          <div class="field"><label>Name</label><input type="text" id="authName" placeholder="Elroy Struct" /></div>
+          <div class="field"><label>Email</label><input type="text" id="authEmail" placeholder="you@zocalocapital.com" /></div>
+          <div class="field"><label>Password</label><input type="password" id="authPassword" placeholder="At least 6 characters" /></div>
+          <div class="field"><label>Sign-up PIN</label><input type="text" id="authPin" placeholder="6-digit PIN" /></div>
+          <div class="auth-hint">Request a sign-up PIN from Elroy to create an account.</div>
+          <button class="btn primary" id="authSubmit">Create account</button>
+        ` : `
+          <div class="field"><label>Email</label><input type="text" id="authEmail" placeholder="you@zocalocapital.com" /></div>
+          <div class="field"><label>Password</label><input type="password" id="authPassword" placeholder="••••••••" /></div>
+          <button class="btn primary" id="authSubmit">Sign in</button>
+        `}
+        ${errorMsg ? `<div class="error-msg">${errorMsg}</div>` : ''}
+      </div>
+    </div>
+  `;
+  document.getElementById('tabSignIn').addEventListener('click', () => renderAuthGate('signin'));
+  document.getElementById('tabSignUp').addEventListener('click', () => renderAuthGate('signup'));
+  document.getElementById('authSubmit').addEventListener('click', async () => {
+    const email = document.getElementById('authEmail').value.trim();
+    const password = document.getElementById('authPassword').value;
+    if (isSignup) {
+      const name = document.getElementById('authName').value.trim();
+      const pin = document.getElementById('authPin').value.trim();
+      const r = await fetch('/api/auth/signup', {
+        method: 'POST', headers: {'Content-Type':'application/json'},
+        body: JSON.stringify({ name, email, password, pin })
+      });
+      const j = await r.json();
+      if (!r.ok) { renderAuthGate('signup', j.error || 'Could not create account.'); return; }
+      state.user = j.user;
+    } else {
+      const r = await fetch('/api/auth/login', {
+        method: 'POST', headers: {'Content-Type':'application/json'},
+        body: JSON.stringify({ email, password })
+      });
+      const j = await r.json();
+      if (!r.ok) { renderAuthGate('signin', j.error || 'Could not sign in.'); return; }
+      state.user = j.user;
+    }
+    afterLogin();
+  });
+}
+
+function afterLogin() {
+  topbarEl.style.display = 'flex';
+  footerBarEl.style.display = 'flex';
+  app.style.height = '';
+  renderAccountCard();
+  checkStatus();
+}
+
+async function init() {
+  const r = await fetch('/api/auth/me');
+  const j = await r.json();
+  if (j.user) {
+    state.user = j.user;
+    afterLogin();
+  } else {
+    renderAuthGate('signin');
+  }
 }
 
 function renderConnectGate(errorMsg) {
@@ -1649,7 +1883,7 @@ document.getElementById('optOutsBtn').addEventListener('click', async () => {
   }
 });
 
-checkStatus();
+init();
 </script>
 
 </body>
