@@ -73,7 +73,7 @@
   }
 
   #app {
-    height: calc(100vh - 56px);
+    height: calc(100vh - 56px - 40px);
     overflow: hidden;
   }
 
@@ -337,7 +337,7 @@
   .dash-wrap { height: 100%; overflow-y: auto; padding: 20px; box-sizing: border-box; }
   .kpi-grid {
     display: grid;
-    grid-template-columns: repeat(4, 1fr);
+    grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
     gap: 12px;
     margin-bottom: 20px;
   }
@@ -363,6 +363,18 @@
   }
   .kpi-card .value.accent { color: var(--accent); }
   .kpi-card .sub { font-size: 11px; color: var(--text-dim); margin-top: 6px; font-family: var(--mono); }
+
+  /* ---------- footer ---------- */
+  .footer-bar {
+    height: 40px;
+    display: flex; align-items: center; justify-content: flex-end;
+    padding: 0 20px; gap: 12px;
+    border-top: 1px solid var(--border);
+    background: var(--panel);
+    font-family: var(--mono); font-size: 12px; color: var(--text-muted);
+  }
+  .footer-bar .btn.small { padding: 5px 12px; }
+  #optOutCount { color: var(--red); font-weight: 700; }
 
   .chart-grid {
     display: grid;
@@ -534,6 +546,12 @@
 
 <div id="app"></div>
 
+<div class="footer-bar">
+  <span id="optOutStatus"></span>
+  <button class="btn small" id="optOutsBtn">Opt-outs (<span id="optOutCount">0</span>)</button>
+</div>
+
+
 <div class="overlay" id="overlay"></div>
 <div class="drawer" id="drawer">
   <button class="close-x" id="drawerClose">✕ close</button>
@@ -555,7 +573,7 @@ const state = {
   campaigns: [],
   dashboard: null,
   kpiPeriod: 'allTime',
-  dashboardTier: 'overview'
+  dashboardTier: 'kpis'
 };
 
 async function loadCampaigns() {
@@ -897,6 +915,7 @@ function renderDashboard() {
   if (tier === 'kpis') {
     const k = d.kpis || {};
     const period = state.kpiPeriod === 'monthly' ? (k.monthly || {}) : (k.allTime || {});
+    const rates = d.smsRates || { sms_cost_outbound: 0.0079, sms_cost_inbound: 0.0075 };
     body.innerHTML = `
       <div style="margin-bottom:12px;">
         <button class="tier-tab ${state.kpiPeriod!=='monthly'?'active':''}" id="kpiAllTimeBtn">All-Time</button>
@@ -934,9 +953,63 @@ function renderDashboard() {
           <div class="sub">no dedicated appointment field yet</div>
         </div>
       </div>
+
+      <div class="chart-card">
+        <h4>Cost breakdown (${state.kpiPeriod === 'monthly' ? 'this month' : 'all-time'})</h4>
+        <div class="chart-note">List/campaign spend plus actual SignalWire 10DLC messaging cost (segments × per-segment rate), which is what feeds price-per-lead and price-per-contract above.</div>
+        <div class="kpi-grid">
+          <div class="kpi-card">
+            <div class="label">List / campaign cost</div>
+            <div class="value">${fmtMoney(period.listCost)}</div>
+          </div>
+          <div class="kpi-card">
+            <div class="label">Messaging cost (SignalWire)</div>
+            <div class="value">${fmtMoney(period.messagingCost)}</div>
+            <div class="sub">out ${fmtMoney(period.outboundMessagingCost)} / in ${fmtMoney(period.inboundMessagingCost)}</div>
+          </div>
+          <div class="kpi-card">
+            <div class="label">Total cost</div>
+            <div class="value accent">${fmtMoney(period.totalCost)}</div>
+          </div>
+        </div>
+        <div class="field" style="max-width:420px; margin-top:14px;">
+          <label>Outbound $/segment</label>
+          <input type="text" id="rateOutboundInput" value="${rates.sms_cost_outbound}" />
+        </div>
+        <div class="field" style="max-width:420px;">
+          <label>Inbound $/segment</label>
+          <input type="text" id="rateInboundInput" value="${rates.sms_cost_inbound}" />
+        </div>
+        <button class="btn" id="saveRatesBtn">Save rates</button>
+        <div id="saveRatesStatus" style="font-family:var(--mono); font-size:11px; margin-top:8px;"></div>
+      </div>
     `;
     document.getElementById('kpiAllTimeBtn')?.addEventListener('click', () => { state.kpiPeriod = 'allTime'; renderDashboard(); });
     document.getElementById('kpiMonthlyBtn')?.addEventListener('click', () => { state.kpiPeriod = 'monthly'; renderDashboard(); });
+    document.getElementById('saveRatesBtn')?.addEventListener('click', async () => {
+      const statusEl = document.getElementById('saveRatesStatus');
+      const outboundVal = parseFloat(document.getElementById('rateOutboundInput').value);
+      const inboundVal = parseFloat(document.getElementById('rateInboundInput').value);
+      if (isNaN(outboundVal) || isNaN(inboundVal)) {
+        statusEl.style.color = 'var(--red)';
+        statusEl.textContent = 'Enter valid numbers for both rates.';
+        return;
+      }
+      statusEl.style.color = 'var(--text-muted)';
+      statusEl.textContent = 'Saving...';
+      const r = await fetch('/api/settings', {
+        method: 'PUT', headers: {'Content-Type':'application/json'},
+        body: JSON.stringify({ smsCostOutbound: outboundVal, smsCostInbound: inboundVal })
+      });
+      if (!r.ok) {
+        statusEl.style.color = 'var(--red)';
+        statusEl.textContent = 'Failed to save rates.';
+        return;
+      }
+      statusEl.style.color = 'var(--accent)';
+      statusEl.textContent = 'Saved. Reloading dashboard...';
+      await loadDashboard();
+    });
   }
 
   if (tier === 'daily') {
@@ -1022,10 +1095,12 @@ function renderDashboard() {
         <div class="chart-note">Campaign cost divided by contacts that hit positive engagement. Lower is better — this is what tells you which list to fund next round.</div>
         ${md.cplBySource.length ? `
           <table class="data-table">
-            <thead><tr><th>Campaign</th><th>Cost</th><th>Leads</th><th>CPL</th></tr></thead>
+            <thead><tr><th>Campaign</th><th>List cost</th><th>Messaging cost</th><th>Total cost</th><th>Leads</th><th>CPL</th></tr></thead>
             <tbody>${md.cplBySource.map(c => `
               <tr>
                 <td>${c.name}${c.market?` (${c.market})`:''}</td>
+                <td>${fmtMoney(c.listCost)}</td>
+                <td>${fmtMoney(c.messagingCost)}</td>
                 <td>${fmtMoney(c.cost)}</td>
                 <td>${c.leads}</td>
                 <td>${c.cpl===null?'N/A':fmtMoney(c.cpl)}</td>
@@ -1528,8 +1603,51 @@ function render() {
     renderCrmShell();
     loadCampaigns();
     loadMessages();
+    loadOptOutCount();
   }
 }
+
+async function loadOptOutCount() {
+  const countEl = document.getElementById('optOutCount');
+  if (!countEl) return;
+  try {
+    const r = await fetch('/api/opt-outs');
+    const j = await r.json();
+    if (r.ok) countEl.textContent = j.count;
+  } catch (e) { /* non-fatal, leave last known count showing */ }
+}
+
+document.getElementById('optOutsBtn').addEventListener('click', async () => {
+  const statusEl = document.getElementById('optOutStatus');
+  statusEl.textContent = 'Preparing file...';
+  try {
+    const r = await fetch('/api/opt-outs/export');
+    if (!r.ok) {
+      const j = await r.json().catch(() => ({}));
+      statusEl.style.color = 'var(--red)';
+      statusEl.textContent = j.error || 'Could not export opt-outs.';
+      return;
+    }
+    const blob = await r.blob();
+    const disposition = r.headers.get('Content-Disposition') || '';
+    const match = disposition.match(/filename=([^;]+)/);
+    const filename = match ? match[1].trim() : 'opt_outs.txt';
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = filename;
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+    URL.revokeObjectURL(url);
+    statusEl.style.color = 'var(--text-muted)';
+    statusEl.textContent = '';
+    loadOptOutCount();
+  } catch (e) {
+    statusEl.style.color = 'var(--red)';
+    statusEl.textContent = 'Network error exporting opt-outs.';
+  }
+});
 
 checkStatus();
 </script>
