@@ -170,13 +170,15 @@ def messages():
 
     inbound = [m for m in all_messages if (m.get("direction") or "").startswith("inbound")]
 
-    # Seller first name isn't stored anywhere; pull it out of our own outbound
-    # opener ("Hey, {firstName} I'm Elroy...") and key it by normalized phone.
+    # Seller first name isn't stored anywhere; pull it out of the "Hey, {firstName}
+    # I'm Elroy..." opener wherever it shows up in the log (normally an outbound
+    # message we sent, but scan every message regardless of direction so a
+    # forwarded/relogged/test copy of that text still gets picked up).
     name_by_phone = {}
     for m in all_messages:
-        if (m.get("direction") or "").startswith("inbound"):
-            continue
-        phone_key = _norm_phone(m.get("to"))
+        is_inbound = (m.get("direction") or "").startswith("inbound")
+        lead_number = m.get("from") if is_inbound else m.get("to")
+        phone_key = _norm_phone(lead_number)
         if not phone_key or phone_key in name_by_phone:
             continue
         name = _extract_first_name(m.get("body"))
