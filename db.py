@@ -86,6 +86,12 @@ def init_db():
                 market TEXT NOT NULL DEFAULT ''
             )
         """)
+        cur.execute("""
+            CREATE TABLE IF NOT EXISTS settings (
+                key TEXT PRIMARY KEY,
+                value TEXT NOT NULL
+            )
+        """)
         # migrate in new columns for dbs created before this feature set existed
         _add_column_if_missing(cur, "contacts", "campaign_id", "INTEGER", True)
         _add_column_if_missing(cur, "contacts", "revenue", "DOUBLE PRECISION NOT NULL DEFAULT 0", True)
@@ -118,6 +124,12 @@ def init_db():
                 notes TEXT NOT NULL DEFAULT '',
                 tags TEXT NOT NULL DEFAULT '[]',
                 market TEXT NOT NULL DEFAULT ''
+            )
+        """)
+        conn.execute("""
+            CREATE TABLE IF NOT EXISTS settings (
+                key TEXT PRIMARY KEY,
+                value TEXT NOT NULL
             )
         """)
         existing_cols = {row[1] for row in conn.execute("PRAGMA table_info(contacts)").fetchall()}
@@ -376,3 +388,67 @@ def save_contact(phone, status=None, notes=None, tags=None, market=None,
         conn.close()
 
     return merged
+
+
+# ---------- settings (SignalWire 10DLC per-message costs, etc.) ----------
+# SignalWire's standard 10DLC SMS rate is ~$0.0079/segment outbound and
+# ~$0.0075/segment inbound as of this writing. These are defaults only —
+# actual rates vary by carrier surcharges and campaign registration tier,
+# so they're editable from the Settings panel rather than hardcoded.
+DEFAULT_SETTINGS = {
+    "sms_cost_outbound": 0.0079,
+    "sms_cost_inbound": 0.0075,
+}
+
+
+def get_settings():
+    if _using_postgres():
+        conn = _pg_conn()
+        cur = conn.cursor()
+        cur.execute("SELECT key, value FROM settings")
+        rows = cur.fetchall()
+        cur.close()
+        conn.close()
+    else:
+        conn = sqlite3.connect(SQLITE_PATH)
+        rows = conn.execute("SELECT key, value FROM settings").fetchall()
+        conn.close()
+    stored = {k: v for k, v in rows}
+    merged = dict(DEFAULT_SETTINGS)
+    for k in DEFAULT_SETTINGS:
+        if k in stored:
+            try:
+                merged[k] = float(stored[k])
+            except (TypeError, ValueError):
+                pass
+    return merged
+
+
+def save_settings(**kwargs):
+    """Only touches keys that are passed in and not None."""
+    updates = {k: v for k, v in kwargs.items() if v is not None and k in DEFAULT_SETTINGS}
+    if not updates:
+        return get_settings()
+
+    if _using_postgres():
+        conn = _pg_conn()
+        cur = conn.cursor()
+        for k, v in updates.items():
+            cur.execute("""
+                INSERT INTO settings (key, value) VALUES (%s, %s)
+                ON CONFLICT (key) DO UPDATE SET value = EXCLUDED.value
+            """, (k, str(float(v))))
+        conn.commit()
+        cur.close()
+        conn.close()
+    else:
+        conn = sqlite3.connect(SQLITE_PATH)
+        for k, v in updates.items():
+            conn.execute("""
+                INSERT INTO settings (key, value) VALUES (?, ?)
+                ON CONFLICT (key) DO UPDATE SET value = excluded.value
+            """, (k, str(float(v))))
+        conn.commit()
+        conn.close()
+
+    return get_settings()
