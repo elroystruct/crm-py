@@ -4,49 +4,55 @@
 <head>
 <meta charset="UTF-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-<title>Zócalo Capital CRM</title>
+<title>Recruiter CRM</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
-<link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;600;700&family=Inter:wght@400;500;600&display=swap" rel="stylesheet">
+<link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@500;600;700;800&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
 <style>
   :root {
-    --bg: #0B0E13;
-    --panel: #12161F;
-    --panel-alt: #171C27;
-    --border: #232A38;
-    --text: #E7EAF0;
-    --text-muted: #7C8598;
-    --text-dim: #4B5468;
-    --accent: #37E8A0;
-    --accent-dim: #1F7A55;
-    --amber: #FF9142;
-    --red: #FF5C5C;
-    --blue: #5B8CFF;
-    --mono: 'JetBrains Mono', monospace;
+    --bg: #14121F;
+    --panel: #1B1A24;
+    --panel-alt: #211F2E;
+    --border: #2E2B3E;
+    --text: #F3F2FA;
+    --text-muted: #8D8AA0;
+    --text-dim: #5B586C;
+    --accent: #7C6FE8;
+    --accent-ink: #FFFFFF;
+    --accent-dim: #3A3363;
+    --amber: #F2994A;
+    --red: #EF6E6E;
+    --blue: #5B9EF3;
+    --green: #34C77B;
+    --violet: #BF74FF;
+    --mono: 'Plus Jakarta Sans', 'Inter', sans-serif;
     --sans: 'Inter', sans-serif;
   }
 
   html[data-theme="light"] {
-    --bg: #F5F6F8;
+    --bg: #F3F1FB;
     --panel: #FFFFFF;
-    --panel-alt: #F0F1F4;
-    --border: #DDE1E8;
-    --text: #171B24;
-    --text-muted: #626B7E;
-    --text-dim: #97A0B3;
-    --accent: #12A876;
-    --accent-dim: #E4F8F0;
-    --amber: #C46A16;
-    --red: #D6423F;
-    --blue: #2E5FD1;
+    --panel-alt: #F1EFFC;
+    --border: #E3DFF5;
+    --text: #1A1A1A;
+    --text-muted: #726F87;
+    --text-dim: #A9A6BC;
+    --accent: #6C5DD3;
+    --accent-ink: #FFFFFF;
+    --accent-dim: #EFECFB;
+    --amber: #C6791F;
+    --red: #D34747;
+    --blue: #3E7FD6;
+    --green: #1F9A5C;
+    --violet: #8E3ACC;
   }
 
-  html[data-theme="light"] .badge.new { background: rgba(196,106,22,0.1); }
-  html[data-theme="light"] .badge.contacted { background: rgba(46,95,209,0.1); }
+  html[data-theme="light"] .badge.new { background: rgba(62,127,214,0.1); }
+  html[data-theme="light"] .badge.contacted { background: rgba(198,121,31,0.1); }
   html[data-theme="light"] .badge.qualified,
-  html[data-theme="light"] .badge.healthy { background: rgba(18,168,118,0.1); }
+  html[data-theme="light"] .badge.healthy { background: rgba(31,154,92,0.1); }
   html[data-theme="light"] .badge.contract { background: rgba(142,58,204,0.1); color: #8E3ACC; border-color: rgba(142,58,204,0.35); }
   html[data-theme="light"] .badge.dead,
-  html[data-theme="light"] .badge.fatigued { background: rgba(214,66,63,0.1); }
+  html[data-theme="light"] .badge.fatigued { background: rgba(211,71,71,0.1); }
   html[data-theme="light"] .kpi-card .value.accent { color: var(--accent); }
 
   body, .btn, input, select, textarea, .badge, .tier-tab {
@@ -96,7 +102,12 @@
     font-weight: 700;
     letter-spacing: 0.02em;
   }
-  .brand .dot { width: 8px; height: 8px; border-radius: 50%; background: var(--accent); }
+  .brand .dot { display: none; }
+  .brand img { height: 22px; width: auto; display: block; }
+  html[data-theme="light"] .brand img.mark-dark { display: block; }
+  html[data-theme="light"] .brand img.mark-light { display: none; }
+  .brand img.mark-dark { display: none; }
+  .brand img.mark-light { display: block; }
   .brand small { color: var(--text-muted); font-weight: 500; font-size: 11px; letter-spacing: 0.08em; text-transform: uppercase; margin-left: 6px; }
 
   .conn {
@@ -144,8 +155,8 @@
     transition: border-color 0.15s, color 0.15s;
   }
   .btn:hover { border-color: var(--accent); color: var(--accent); }
-  .btn.primary { background: var(--accent); color: #06110B; border-color: var(--accent); }
-  .btn.primary:hover { opacity: 0.9; color: #06110B; }
+  .btn.primary { background: var(--accent); color: var(--accent-ink); border-color: var(--accent); }
+  .btn.primary:hover { opacity: 0.9; color: var(--accent-ink); }
   .btn.small { padding: 4px 9px; font-size: 11px; }
 
   /* ---------- layout ---------- */
@@ -265,13 +276,13 @@
     display: inline-block;
     white-space: nowrap;
   }
-  .badge.new { background: rgba(255,145,66,0.15); color: var(--amber); border: 1px solid rgba(255,145,66,0.4); }
-  .badge.contacted { background: rgba(91,140,255,0.15); color: var(--blue); border: 1px solid rgba(91,140,255,0.4); }
-  .badge.qualified { background: rgba(55,232,160,0.15); color: var(--accent); border: 1px solid rgba(55,232,160,0.4); }
-  .badge.contract { background: rgba(191,116,255,0.15); color: #BF74FF; border: 1px solid rgba(191,116,255,0.4); }
-  .badge.dead { background: rgba(255,92,92,0.15); color: var(--red); border: 1px solid rgba(255,92,92,0.4); }
-  .badge.fatigued { background: rgba(255,92,92,0.15); color: var(--red); border: 1px solid rgba(255,92,92,0.4); }
-  .badge.healthy { background: rgba(55,232,160,0.15); color: var(--accent); border: 1px solid rgba(55,232,160,0.4); }
+  .badge.new { background: rgba(91,158,243,0.15); color: var(--blue); border: 1px solid rgba(91,158,243,0.4); }
+  .badge.contacted { background: rgba(242,153,74,0.15); color: var(--amber); border: 1px solid rgba(242,153,74,0.4); }
+  .badge.qualified { background: rgba(52,199,123,0.15); color: var(--green); border: 1px solid rgba(52,199,123,0.4); }
+  .badge.contract { background: rgba(191,116,255,0.15); color: var(--violet); border: 1px solid rgba(191,116,255,0.4); }
+  .badge.dead { background: rgba(239,110,110,0.15); color: var(--red); border: 1px solid rgba(239,110,110,0.4); }
+  .badge.fatigued { background: rgba(239,110,110,0.15); color: var(--red); border: 1px solid rgba(239,110,110,0.4); }
+  .badge.healthy { background: rgba(52,199,123,0.15); color: var(--green); border: 1px solid rgba(52,199,123,0.4); }
 
   /* ---------- dashboard tiers ---------- */
   .tier-tabs { display: flex; gap: 4px; margin-bottom: 16px; }
@@ -281,7 +292,7 @@
     padding: 7px 14px; border-radius: 20px; cursor: pointer;
   }
   .tier-tab:hover { color: var(--text); }
-  .tier-tab.active { color: #06110B; background: var(--accent); border-color: var(--accent); }
+  .tier-tab.active { color: var(--accent-ink); background: var(--accent); border-color: var(--accent); }
 
   .data-table { width: 100%; border-collapse: collapse; font-size: 12px; margin-top: 4px; }
   .data-table th { text-align: left; padding: 6px 10px; font-family: var(--mono); font-size: 10px; text-transform: uppercase; color: var(--text-muted); border-bottom: 1px solid var(--border); }
@@ -385,7 +396,7 @@
   .account-trigger:hover { border-color: var(--border); background: var(--panel-alt); }
   .avatar {
     width: 26px; height: 26px; border-radius: 50%; flex: 0 0 auto;
-    background: var(--accent); color: #06110B; font-family: var(--mono); font-weight: 700;
+    background: var(--accent); color: var(--accent-ink); font-family: var(--mono); font-weight: 700;
     font-size: 11px; display: flex; align-items: center; justify-content: center;
     overflow: hidden; text-transform: uppercase;
   }
@@ -410,14 +421,20 @@
   /* ---------- auth (login / signup) ---------- */
   .auth-shell {
     height: 100%; display: flex; align-items: center; justify-content: center;
-    background: var(--bg);
+    background: radial-gradient(circle at 15% 15%, rgba(124,111,232,0.16), transparent 45%), var(--bg);
   }
   .auth-card {
     width: 100%; max-width: 380px; background: var(--panel); border: 1px solid var(--border);
-    border-radius: 12px; padding: 32px 28px;
+    border-radius: 20px; padding: 36px 30px;
+    box-shadow: 0 20px 48px -20px rgba(46,38,92,0.35);
   }
-  .auth-brand { text-align: center; margin-bottom: 22px; }
-  .auth-brand .dot { display: inline-block; width: 8px; height: 8px; border-radius: 50%; background: var(--accent); margin-right: 8px; }
+  .auth-brand { text-align: center; margin-bottom: 24px; }
+  .auth-brand .dot { display: none; }
+  .auth-brand img { height: 26px; width: auto; margin: 0 auto 10px; display: block; }
+  html[data-theme="light"] .auth-brand img.mark-dark { display: block; }
+  html[data-theme="light"] .auth-brand img.mark-light { display: none; }
+  .auth-brand img.mark-dark { display: none; }
+  .auth-brand img.mark-light { display: block; }
   .auth-brand .name { font-family: var(--mono); font-weight: 700; letter-spacing: 0.02em; font-size: 15px; color: var(--text); }
   .auth-brand .sub { font-family: var(--mono); font-size: 10.5px; color: var(--text-muted); text-transform: uppercase; letter-spacing: 0.1em; margin-top: 4px; }
   .auth-tabs { display: flex; margin-bottom: 20px; border: 1px solid var(--border); border-radius: 8px; overflow: hidden; }
@@ -425,7 +442,7 @@
     flex: 1; text-align: center; padding: 9px; font-family: var(--mono); font-size: 12px;
     color: var(--text-muted); cursor: pointer; background: var(--panel-alt);
   }
-  .auth-tab.active { background: var(--accent); color: #06110B; font-weight: 600; }
+  .auth-tab.active { background: var(--accent); color: var(--accent-ink); font-weight: 600; }
   .auth-card .field { margin-bottom: 12px; }
   .auth-card .btn.primary { width: 100%; padding: 10px; margin-top: 6px; }
   .auth-hint { color: var(--text-dim); font-size: 11px; margin: -6px 0 12px; font-family: var(--mono); line-height: 1.5; }
@@ -548,7 +565,7 @@
     border-bottom-left-radius: 4px;
   }
   .chat-row.out .chat-bubble {
-    background: var(--accent); color: #06110B;
+    background: var(--accent); color: var(--accent-ink);
     border-bottom-right-radius: 4px;
   }
   .chat-meta {
@@ -588,7 +605,11 @@
 <body>
 
 <div class="topbar" id="topbarEl">
-  <div class="brand"><span class="dot"></span>ZÓCALO CAPITAL<small>CRM</small></div>
+  <div class="brand">
+    <img class="mark-light" src="assets/logo-white-crop.png" alt="Recruiter CRM">
+    <img class="mark-dark" src="assets/logo-black-crop.png" alt="Recruiter CRM">
+    RECRUITER<small>CRM</small>
+  </div>
   <div class="conn">
     <div class="signal-bars" id="signalBars"><div class="bar"></div><div class="bar"></div><div class="bar"></div><div class="bar"></div></div>
     <span id="connLabel">not connected</span>
@@ -797,8 +818,9 @@ function renderAuthGate(mode, errorMsg) {
     <div class="auth-shell">
       <div class="auth-card">
         <div class="auth-brand">
-          <div><span class="dot"></span><span class="name">ZÓCALO CAPITAL</span></div>
-          <div class="sub">CRM</div>
+          <img class="mark-light" src="assets/logo-white-crop.png" alt="Recruiter CRM">
+          <img class="mark-dark" src="assets/logo-black-crop.png" alt="Recruiter CRM">
+          <div><span class="name">RECRUITER CRM</span></div>
         </div>
         <div class="auth-tabs">
           <div class="auth-tab ${!isSignup ? 'active' : ''}" id="tabSignIn">Sign in</div>
@@ -806,13 +828,13 @@ function renderAuthGate(mode, errorMsg) {
         </div>
         ${isSignup ? `
           <div class="field"><label>Name</label><input type="text" id="authName" placeholder="Elroy Struct" /></div>
-          <div class="field"><label>Email</label><input type="text" id="authEmail" placeholder="you@zocalocapital.com" /></div>
+          <div class="field"><label>Email</label><input type="text" id="authEmail" placeholder="you@recruitercrm.com" /></div>
           <div class="field"><label>Password</label><input type="password" id="authPassword" placeholder="At least 6 characters" /></div>
           <div class="field"><label>Sign-up PIN</label><input type="text" id="authPin" placeholder="6-digit PIN" /></div>
           <div class="auth-hint">Request a sign-up PIN from Elroy to create an account.</div>
           <button class="btn primary" id="authSubmit">Create account</button>
         ` : `
-          <div class="field"><label>Email</label><input type="text" id="authEmail" placeholder="you@zocalocapital.com" /></div>
+          <div class="field"><label>Email</label><input type="text" id="authEmail" placeholder="you@recruitercrm.com" /></div>
           <div class="field"><label>Password</label><input type="password" id="authPassword" placeholder="••••••••" /></div>
           <button class="btn primary" id="authSubmit">Sign in</button>
         `}
