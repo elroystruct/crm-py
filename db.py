@@ -87,6 +87,16 @@ def init_db():
             )
         """)
         cur.execute("""
+            CREATE TABLE IF NOT EXISTS users (
+                id SERIAL PRIMARY KEY,
+                email TEXT UNIQUE NOT NULL,
+                password_hash TEXT NOT NULL,
+                name TEXT NOT NULL DEFAULT '',
+                avatar TEXT,
+                created_at TEXT NOT NULL
+            )
+        """)
+        cur.execute("""
             CREATE TABLE IF NOT EXISTS settings (
                 key TEXT PRIMARY KEY,
                 value TEXT NOT NULL
@@ -124,6 +134,16 @@ def init_db():
                 notes TEXT NOT NULL DEFAULT '',
                 tags TEXT NOT NULL DEFAULT '[]',
                 market TEXT NOT NULL DEFAULT ''
+            )
+        """)
+        conn.execute("""
+            CREATE TABLE IF NOT EXISTS users (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                email TEXT UNIQUE NOT NULL,
+                password_hash TEXT NOT NULL,
+                name TEXT NOT NULL DEFAULT '',
+                avatar TEXT,
+                created_at TEXT NOT NULL
             )
         """)
         conn.execute("""
@@ -452,3 +472,114 @@ def save_settings(**kwargs):
         conn.close()
 
     return get_settings()
+
+
+# ---------- users (login / signup) ----------
+def _user_row_to_record(row):
+    (uid, email, password_hash, name, avatar, created_at) = row
+    return {
+        "id": uid,
+        "email": email,
+        "passwordHash": password_hash,
+        "name": name,
+        "avatar": avatar,
+        "createdAt": created_at,
+    }
+
+
+USER_COLS = "id, email, password_hash, name, avatar, created_at"
+
+
+def get_user_by_email(email):
+    email = (email or "").strip().lower()
+    if not email:
+        return None
+    if _using_postgres():
+        conn = _pg_conn()
+        cur = conn.cursor()
+        cur.execute(f"SELECT {USER_COLS} FROM users WHERE lower(email) = %s", (email,))
+        row = cur.fetchone()
+        cur.close()
+        conn.close()
+    else:
+        conn = sqlite3.connect(SQLITE_PATH)
+        row = conn.execute(f"SELECT {USER_COLS} FROM users WHERE lower(email) = ?", (email,)).fetchone()
+        conn.close()
+    return _user_row_to_record(row) if row else None
+
+
+def get_user_by_id(user_id):
+    if _using_postgres():
+        conn = _pg_conn()
+        cur = conn.cursor()
+        cur.execute(f"SELECT {USER_COLS} FROM users WHERE id = %s", (user_id,))
+        row = cur.fetchone()
+        cur.close()
+        conn.close()
+    else:
+        conn = sqlite3.connect(SQLITE_PATH)
+        row = conn.execute(f"SELECT {USER_COLS} FROM users WHERE id = ?", (user_id,)).fetchone()
+        conn.close()
+    return _user_row_to_record(row) if row else None
+
+
+def create_user(email, password_hash, name):
+    email = (email or "").strip().lower()
+    created_at = now_iso()
+    if _using_postgres():
+        conn = _pg_conn()
+        cur = conn.cursor()
+        cur.execute(
+            "INSERT INTO users (email, password_hash, name, created_at) VALUES (%s,%s,%s,%s) RETURNING id",
+            (email, password_hash, name, created_at),
+        )
+        new_id = cur.fetchone()[0]
+        conn.commit()
+        cur.close()
+        conn.close()
+    else:
+        conn = sqlite3.connect(SQLITE_PATH)
+        cur = conn.execute(
+            "INSERT INTO users (email, password_hash, name, created_at) VALUES (?,?,?,?)",
+            (email, password_hash, name, created_at),
+        )
+        new_id = cur.lastrowid
+        conn.commit()
+        conn.close()
+    return get_user_by_id(new_id)
+
+
+def update_user(user_id, name=None, avatar=_UNSET):
+    existing = get_user_by_id(user_id)
+    if not existing:
+        return None
+    merged_name = name if name is not None else existing["name"]
+    merged_avatar = existing["avatar"] if avatar is _UNSET else avatar
+    if _using_postgres():
+        conn = _pg_conn()
+        cur = conn.cursor()
+        cur.execute("UPDATE users SET name=%s, avatar=%s WHERE id=%s", (merged_name, merged_avatar, user_id))
+        conn.commit()
+        cur.close()
+        conn.close()
+    else:
+        conn = sqlite3.connect(SQLITE_PATH)
+        conn.execute("UPDATE users SET name=?, avatar=? WHERE id=?", (merged_name, merged_avatar, user_id))
+        conn.commit()
+        conn.close()
+    return get_user_by_id(user_id)
+
+
+def delete_user(user_id):
+    if _using_postgres():
+        conn = _pg_conn()
+        cur = conn.cursor()
+        cur.execute("DELETE FROM users WHERE id = %s", (user_id,))
+        conn.commit()
+        cur.close()
+        conn.close()
+    else:
+        conn = sqlite3.connect(SQLITE_PATH)
+        conn.execute("DELETE FROM users WHERE id = ?", (user_id,))
+        conn.commit()
+        conn.close()
