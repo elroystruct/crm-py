@@ -16,6 +16,10 @@ services:
         fromDatabase:
           name: signalwire-crm-db
           property: connectionString
+      # Signs login session cookies. Auto-generated once by Render and then left
+      # alone, so signed-in users stay signed in across redeploys/restarts.
+      - key: SECRET_KEY
+        generateValue: true
       # Set these in the Render dashboard (Environment tab) after first deploy —
       # left blank here so secrets never live in the GitHub repo.
       - key: SIGNALWIRE_SPACE
