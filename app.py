@@ -191,30 +191,7 @@ def auth_header():
 # ---------- static frontend ----------
 @app.route("/")
 def index():
-    if session.get("user_id"):
-        return send_from_directory(app.static_folder, "dashboard.html")
-    return send_from_directory(app.static_folder, "login.html")
-
-
-@app.route("/login")
-def login_page():
-    if session.get("user_id"):
-        return send_from_directory(app.static_folder, "dashboard.html")
-    return send_from_directory(app.static_folder, "login.html")
-
-
-@app.route("/dashboard")
-def dashboard_page():
-    if not session.get("user_id"):
-        return send_from_directory(app.static_folder, "login.html")
-    return send_from_directory(app.static_folder, "dashboard.html")
-
-
-@app.route("/messages")
-def messages_page():
-    if not session.get("user_id"):
-        return send_from_directory(app.static_folder, "login.html")
-    return send_from_directory(app.static_folder, "messages.html")
+    return send_from_directory(app.static_folder, "index.html")
 
 
 # ---------- connection ----------
