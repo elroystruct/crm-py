@@ -790,10 +790,10 @@ def _is_stop_message(body):
 
 
 # Matches the opener of our outbound cold-text template:
-#   "Hey, " + firstName + " I'm Elroy with Recruiter CRM, ..."
+#   "Hey, " + firstName + " I'm Elroy with Zocalo, ..."
 # Anchor = "Hey, " up to the next space; that's the name.
 # Matches the opener of our outbound cold-text template:
-#   "Hey, " + firstName + " I'm Elroy with Recruiter CRM, ..."
+#   "Hey, " + firstName + " I'm Elroy with Zocalo, ..."
 # Anchors: starts right after "Hey," and ends right before " I'm" (handles curly apostrophe too).
 _NAME_RE = re.compile(r"Hey,\s*([A-Za-z'\-]+)\s+I['\u2019]?m\b", re.IGNORECASE)
 
