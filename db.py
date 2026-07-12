@@ -5,7 +5,7 @@ velocity reporting.
 
 - If DATABASE_URL is set (e.g. Render's managed Postgres add-on), use Postgres.
   This survives redeploys, since Render's web service disk is ephemeral.
-- Otherwise, fall back to a local SQLite file (data/contacts.db) — fine for
+- Otherwise, fall back to a local SQLite file (data/contacts.db), fine for
   local development, but note this resets on every Render redeploy if you
   don't attach a persistent disk or Postgres.
 """
@@ -17,7 +17,7 @@ import datetime as dt
 DATABASE_URL = os.environ.get("DATABASE_URL")
 SQLITE_PATH = os.path.join(os.path.dirname(__file__), "data", "contacts.db")
 
-# Sentinel meaning "caller didn't pass this field, leave it alone" — distinct
+# Sentinel meaning "caller didn't pass this field, leave it alone", distinct
 # from None, which callers use to explicitly clear a nullable field.
 _UNSET = object()
 
@@ -43,7 +43,7 @@ def _using_postgres():
 
 def _pg_conn():
     import psycopg2
-    # Render's DATABASE_URL sometimes uses postgres:// — psycopg2 accepts it directly.
+    # Render's DATABASE_URL sometimes uses postgres://, psycopg2 accepts it directly.
     return psycopg2.connect(DATABASE_URL, sslmode="require")
 
 
@@ -412,7 +412,7 @@ def save_contact(phone, status=None, notes=None, tags=None, market=None,
 
 # ---------- settings (SignalWire 10DLC per-message costs, etc.) ----------
 # SignalWire's standard 10DLC SMS rate is ~$0.0079/segment outbound and
-# ~$0.0075/segment inbound as of this writing. These are defaults only —
+# ~$0.0075/segment inbound as of this writing. These are defaults only ,
 # actual rates vary by carrier surcharges and campaign registration tier,
 # so they're editable from the Settings panel rather than hardcoded.
 DEFAULT_SETTINGS = {
