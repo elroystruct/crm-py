@@ -2026,7 +2026,7 @@ async function loadLeadDetail(phone) {
       <label>Campaign / batch</label>
       <select id="campaignSelect">
         <option value="">(none)</option>
-        ${state.campaigns.map(c => `<option value="${c.id}" ${String(rec.campaign_id)===String(c.id)?'selected':''}>${c.name}${c.market?` — ${c.market}`:''}</option>`).join('')}
+        ${state.campaigns.map(c => `<option value="${c.id}" ${String(rec.campaign_id)===String(c.id)?'selected':''}>${c.name}${c.market?` - ${c.market}`:''}</option>`).join('')}
       </select>
     </div>
     <div class="field">
