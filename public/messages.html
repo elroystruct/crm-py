@@ -1,0 +1,559 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Zocalo Capital — Messages</title>
+<link rel="stylesheet" href="styles.css">
+<script src="app-common.js"></script>
+<style>
+  body{ overflow:hidden; }
+  .msg-shell{ flex:1; display:flex; gap:14px; min-width:0; }
+
+  /* ---- column 1: inbox nav ---- */
+  .col-inbox{ flex: 0 0 250px; padding: 20px 14px; display:flex; flex-direction:column; }
+  .inbox-head{ display:flex; align-items:center; justify-content:space-between; padding: 4px 8px 18px; }
+  .inbox-head h2{ font-size:16px; }
+  .inbox-add{
+    width:30px; height:30px; border-radius:9px; background: var(--ink); color:#fff;
+    display:flex; align-items:center; justify-content:center; transition: transform .15s var(--ease);
+  }
+  .inbox-add:hover{ transform: scale(1.07); }
+
+  .nav-section{ font-size:11px; font-weight:700; color: var(--meta-quiet); text-transform:uppercase; letter-spacing:.05em; padding: 14px 10px 6px; }
+  .nav-link{
+    display:flex; align-items:center; gap:10px; padding:8px 10px; border-radius:10px;
+    font-size:13.5px; color: var(--ink-soft); transition: background .2s var(--ease), color .2s var(--ease);
+  }
+  .nav-link svg{ width:15px; height:15px; color: var(--meta); flex:0 0 auto; }
+  .nav-link:hover{ background: var(--lavender-hover); }
+  .nav-link .count{ margin-left:auto; font-size:11.5px; color:var(--meta); font-weight:600; }
+  .nav-link.active{ background: var(--ink); color:#fff; }
+  .nav-link.active svg{ color:#fff; }
+  .nav-link.active .count{ color: rgba(255,255,255,0.7); }
+  .nav-link.sub{ padding-left: 30px; font-size:13px; }
+
+  .nav-group-head{ display:flex; align-items:center; gap:10px; padding:8px 10px; border-radius:10px; cursor:pointer; }
+  .nav-group-head:hover{ background: var(--lavender-hover); }
+  .nav-group-head svg.chevron{ width:12px; height:12px; color: var(--meta); margin-left:auto; }
+  .nav-group-head .grp-icon{ width:15px; height:15px; color:var(--meta); }
+  .nav-group-head .count{ font-size:11.5px; color:var(--meta); font-weight:600; }
+
+  .contact-row{ display:flex; align-items:center; gap:10px; padding: 6px 10px; border-radius:10px; font-size:13px; }
+  .contact-row:hover{ background: var(--lavender-hover); }
+  .contact-row .avatar{ width:24px; height:24px; }
+
+  .add-contact{ display:flex; align-items:center; gap:8px; padding: 8px 10px; font-size:13px; color: var(--purple-deep); font-weight:600; }
+  .add-contact svg{ width:14px; height:14px; }
+
+  /* ---- column 2: thread list ---- */
+  .col-list{ flex: 0 0 300px; padding: 20px 14px; display:flex; flex-direction:column; min-width:0; }
+  .list-head{ display:flex; align-items:center; justify-content:space-between; padding: 2px 8px 14px; }
+  .list-head h2{ font-size:15px; display:flex; align-items:center; gap:8px; }
+  .list-head svg{ width:15px; height:15px; color: var(--meta); }
+  .thread-scroll{ overflow-y:auto; flex:1; display:flex; flex-direction:column; gap:2px; margin-top:10px; padding-right:2px; }
+
+  .t-row{ padding: 11px; }
+  .t-row .meta-line{ display:flex; align-items:center; justify-content:space-between; margin-bottom:3px; }
+  .t-row .name{ font-size:13.5px; font-weight:600; }
+  .t-row .time{ font-size:11px; color: var(--meta); }
+  .t-row .preview-line{ display:flex; align-items:center; justify-content:space-between; gap:6px; }
+  .t-row .preview{ font-size:12.5px; color: var(--meta); overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+  .t-row .tags-row{ display:flex; gap:5px; margin-top:6px; }
+
+  /* ---- column 3: thread ---- */
+  .col-thread{ flex: 1.4; padding: 0; display:flex; flex-direction:column; min-width:0; }
+  .thread-head{ display:flex; align-items:center; justify-content:space-between; padding: 20px 22px; border-bottom: 1px solid var(--border); }
+  .thread-head .title-block h2{ font-size:16px; }
+  .thread-head .title-block .sub{ font-size:12px; color:var(--meta); margin-top:2px; }
+  .thread-head-actions{ display:flex; align-items:center; gap:10px; }
+  .move-btn{ display:flex; align-items:center; gap:7px; font-size:12.5px; font-weight:600; color: var(--ink-soft); }
+  .move-btn svg{ width:14px; height:14px; }
+
+  .thread-body{ flex:1; overflow-y:auto; padding: 22px; display:flex; flex-direction:column; gap:16px; }
+  .bubble-row{ display:flex; gap:10px; max-width:72%; }
+  .bubble-row.mine{ align-self:flex-end; flex-direction:row-reverse; }
+  .bubble-row .avatar{ width:30px; height:30px; margin-top:auto; }
+  .bubble{
+    background: var(--panel-off); border: 1px solid var(--border);
+    border-radius: 16px; padding: 12px 15px; font-size:13.5px; line-height:1.5;
+  }
+  .bubble-row.mine .bubble{
+    background: linear-gradient(155deg, var(--lavender-tint), var(--lavender-hover));
+    border-color: transparent;
+  }
+  .bubble .sender{ font-weight:700; font-size:12.5px; margin-bottom:4px; }
+  .bubble .stamp{ font-size:10.5px; color: var(--meta); margin-top:6px; text-align:right; }
+  .bubble a{ color: var(--purple-deep); font-weight:600; word-break:break-all; }
+  .bubble .chips{ display:flex; gap:8px; margin-top:10px; }
+  .bubble .chips span{ display:inline-flex; align-items:center; gap:6px; font-size:11.5px; font-weight:600; padding:6px 10px; border-radius:999px; background: var(--panel); border:1px solid var(--border); }
+
+  .composer{ padding: 16px 22px 20px; }
+  .composer-wrap{
+    display:flex; align-items:center; gap:10px;
+    background: var(--panel-off); border: 1px solid var(--border);
+    border-radius: 16px; padding: 8px 8px 8px 16px;
+  }
+  .composer-wrap input{ flex:1; border:none; outline:none; background:transparent; font-size:13.5px; }
+  .composer-wrap input::placeholder{ color: var(--meta); }
+  .composer-icon{ width:32px; height:32px; border-radius:10px; display:flex; align-items:center; justify-content:center; color: var(--meta); }
+  .composer-icon:hover{ background: var(--lavender-hover); color: var(--ink); }
+  .composer-icon svg{ width:16px; height:16px; }
+  .send-btn{ width:36px; height:36px; border-radius:11px; background: var(--ink); color:#fff; display:flex; align-items:center; justify-content:center; transition: transform .15s var(--ease); }
+  .send-btn:hover{ transform: scale(1.06); }
+  .send-btn svg{ width:15px; height:15px; }
+
+  /* ---- column 4: profile info ---- */
+  .col-info{ flex: 0 0 280px; padding: 20px 18px; overflow-y:auto; }
+  .info-head{ display:flex; align-items:center; justify-content:space-between; margin-bottom:16px; }
+  .info-head h3{ font-size:15px; }
+  .info-head svg{ width:15px; height:15px; color:var(--meta); cursor:pointer; }
+
+  .profile-card{ text-align:left; }
+  .profile-avatar{ width:56px; height:56px; border-radius:16px; margin-bottom:12px; }
+  .profile-name{ font-size:16px; font-weight:700; }
+  .profile-addr{ display:flex; align-items:center; gap:6px; font-size:12px; color: var(--purple-deep); font-weight:600; margin-top:4px; }
+  .profile-addr svg{ width:12px; height:12px; }
+
+  .profile-actions{ display:flex; gap:8px; margin: 16px 0 20px; }
+  .profile-actions .btn-icon{ flex:0 0 auto; }
+  .profile-actions .btn-dark{ flex:1; font-size:12.5px; padding:10px; }
+
+  .info-list{ display:flex; flex-direction:column; gap:0; }
+  .info-list .info-row{ display:flex; align-items:center; justify-content:space-between; padding: 11px 2px; border-bottom: 1px solid var(--border-soft); }
+  .info-list .info-row:last-child{ border-bottom:none; }
+  .info-row .lbl{ display:flex; align-items:center; gap:9px; font-size:12.5px; color: var(--meta); }
+  .info-row .lbl .ic{ width:26px; height:26px; border-radius:8px; display:flex; align-items:center; justify-content:center; }
+  .info-row .lbl .ic svg{ width:13px; height:13px; }
+  .info-row .val{ font-size:12.5px; font-weight:600; }
+
+  .notif-item{ display:flex; align-items:center; gap:10px; padding: 10px 2px; }
+  .notif-item .ic{ width:30px; height:30px; border-radius:9px; display:flex; align-items:center; justify-content:center; flex:0 0 auto; }
+  .notif-item .ic svg{ width:14px; height:14px; }
+  .notif-item .t{ font-size:12.5px; font-weight:600; }
+  .notif-item .s{ font-size:11px; color:var(--meta); margin-top:1px; }
+
+  .toggle-row{ display:flex; align-items:center; justify-content:space-between; padding: 9px 2px; font-size:12.5px; }
+  .mini-switch{ width:34px; height:20px; border-radius:999px; background: var(--purple); position:relative; cursor:pointer; }
+  .mini-switch::after{ content:''; position:absolute; top:2px; left:16px; width:16px; height:16px; border-radius:50%; background:#fff; transition: transform .2s var(--ease); }
+  .mini-switch.off{ background: var(--meta-quiet); }
+  .mini-switch.off::after{ transform: translateX(-16px); }
+</style>
+</head>
+<body>
+<div class="app-shell">
+
+  <!-- RAIL -->
+  <nav class="rail">
+    <div class="rail-logo"><img src="assets/logo-dark.png" alt="ZC"></div>
+    <div class="rail-nav">
+      <a class="rail-item" title="Dashboard" href="/dashboard">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><rect x="3" y="3" width="7" height="9" rx="2"/><rect x="14" y="3" width="7" height="5" rx="2"/><rect x="14" y="12" width="7" height="9" rx="2"/><rect x="3" y="16" width="7" height="5" rx="2"/></svg>
+      </a>
+      <a class="rail-item" title="Deals" href="/dashboard">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M3 7l9-4 9 4-9 4-9-4z"/><path d="M3 12l9 4 9-4M3 17l9 4 9-4"/></svg>
+      </a>
+      <a class="rail-item active" title="Messages" href="/messages">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M21 15a2 2 0 01-2 2H7l-4 4V5a2 2 0 012-2h14a2 2 0 012 2z"/></svg>
+        <span class="dot-badge" id="railMsgBadge" style="display:none;">0</span>
+      </a>
+      <a class="rail-item" title="Contacts" href="/messages">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><circle cx="12" cy="8" r="4"/><path d="M4 21c0-4 4-6 8-6s8 2 8 6"/></svg>
+      </a>
+      <a class="rail-item" title="Analytics" href="/dashboard">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M4 20V10M12 20V4M20 20v-7"/></svg>
+      </a>
+      <a class="rail-item" title="Campaigns" href="/dashboard">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M3 11l18-7-7 18-2-8-9-3z"/></svg>
+      </a>
+    </div>
+    <a class="rail-item" title="Sign out" id="logoutBtn" href="#">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M9 21H5a2 2 0 01-2-2V5a2 2 0 012-2h4"/><path d="M16 17l5-5-5-5M21 12H9"/></svg>
+    </a>
+    <div class="rail-avatar"><img data-user-avatar src="https://i.pravatar.cc/80?img=13" alt="You"></div>
+  </nav>
+
+  <div class="msg-shell">
+
+    <!-- COL 1: INBOX NAV -->
+    <div class="panel col-inbox rise-in">
+      <div class="inbox-head">
+        <h2>Inbox</h2>
+        <button class="inbox-add">+</button>
+      </div>
+
+      <a class="nav-link"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><rect x="3" y="4" width="18" height="16" rx="2"/><path d="M3 9h18"/></svg>Channels</a>
+      <a class="nav-link"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M4 4h16v12H8l-4 4z"/></svg>Drafts</a>
+      <a class="nav-link"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><circle cx="12" cy="12" r="9"/><path d="M12 8v4l3 2"/></svg>Mentions</a>
+      <a class="nav-link"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M13 3H6a2 2 0 00-2 2v14a2 2 0 002 2h12a2 2 0 002-2V9z"/><path d="M13 3v6h6"/></svg>Files &amp; Media</a>
+
+      <div class="nav-section">Pipeline</div>
+      <a class="nav-link" data-filter="new"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><circle cx="12" cy="12" r="9"/><path d="M12 8v8M8 12h8"/></svg>New<span class="count" id="countNew">0</span></a>
+      <a class="nav-link active" data-filter="all"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><rect x="3" y="5" width="18" height="14" rx="2"/><path d="M3 9h18"/></svg>All<span class="count" id="countAll">0</span></a>
+      <a class="nav-link" data-filter="qualified"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M20 6L9 17l-5-5"/></svg>Qualified<span class="count" id="countQualified">0</span></a>
+      <a class="nav-link" data-filter="favourites"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M12 17.3l-6.2 3.6 1.6-7L2 9.2l7.1-.6L12 2l2.9 6.6 7.1.6-5.4 4.7 1.6 7z"/></svg>Favourites<span class="count">0</span></a>
+
+      <div class="nav-group-head collapsible open" id="negGroup">
+        <svg class="grp-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M17 8V6a3 3 0 00-3-3H6a3 3 0 00-3 3v8a3 3 0 003 3h2"/><rect x="9" y="9" width="12" height="12" rx="2"/></svg>
+        <span style="font-size:13.5px;color:var(--ink-soft);">Under contract</span>
+        <span class="count">20</span>
+        <svg class="chevron" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 6l6 6-6 6"/></svg>
+      </div>
+      <div class="collapsible-body" style="max-height:120px; opacity:1;" id="negBody">
+        <a class="nav-link sub">All</a>
+        <a class="nav-link sub">Urgent</a>
+        <a class="nav-link sub">Completed</a>
+      </div>
+
+      <a class="nav-link" data-filter="dead"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><circle cx="12" cy="12" r="10"/><path d="M15 9l-6 6M9 9l6 6"/></svg>Dead leads<span class="count" id="countDead">0</span></a>
+      <a class="nav-link"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><rect x="3" y="3" width="18" height="5" rx="1"/><path d="M4 8v10a2 2 0 002 2h12a2 2 0 002-2V8M10 12h4"/></svg>Archives<span class="count">32</span></a>
+
+      <div class="nav-section">Contacts</div>
+      <div class="contact-row"><div class="avatar"><img src="https://i.pravatar.cc/60?img=25"></div>Indigo Reyes</div>
+      <div class="contact-row"><div class="avatar"><img src="https://i.pravatar.cc/60?img=32"></div>Adam Colt</div>
+      <div class="contact-row"><div class="avatar"><img src="https://i.pravatar.cc/60?img=45"></div>Canaan Boyd</div>
+      <div class="contact-row"><div class="avatar"><img src="https://i.pravatar.cc/60?img=51"></div>Kelly Sexton</div>
+      <div class="contact-row"><div class="avatar"><img src="https://i.pravatar.cc/60?img=15"></div>Rosario Terracciano</div>
+      <div class="add-contact"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><path d="M12 8v8M8 12h8"/></svg>Add contact</div>
+    </div>
+
+    <!-- COL 2: THREAD LIST -->
+    <div class="panel col-list rise-in">
+      <div class="list-head">
+        <h2><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><rect x="3" y="5" width="18" height="14" rx="2"/><path d="M3 9h18"/></svg>All conversations</h2>
+      </div>
+      <div class="search-pill">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="7"/><path d="M21 21l-4.3-4.3"/></svg>
+        <input type="text" id="searchInput" placeholder="Search leads, phone or message...">
+      </div>
+
+      <div class="thread-scroll" id="threadScroll">
+        <div class="text-meta" style="padding:14px 10px;">Loading conversations…</div>
+      </div>
+    </div>
+
+    <!-- COL 3: THREAD -->
+    <div class="panel col-thread rise-in">
+      <div class="thread-head">
+        <div class="title-block">
+          <h2 id="threadName">Select a lead</h2>
+          <div class="sub" id="threadSub">&nbsp;</div>
+        </div>
+        <div class="thread-head-actions" id="threadActions" style="display:none;">
+          <select id="statusSelect" class="btn btn-ghost" style="background:var(--lavender-hover); font-weight:600; cursor:pointer;">
+            <option value="new">New</option>
+            <option value="qualified">Qualified</option>
+            <option value="under_contract">Under contract</option>
+            <option value="dead">Dead lead</option>
+          </select>
+          <button class="btn-icon" title="Assign"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><circle cx="9" cy="8" r="3.5"/><path d="M2.5 20c0-3.3 2.9-5.5 6.5-5.5s6.5 2.2 6.5 5.5M17 8h5M19.5 5.5v5"/></svg></button>
+          <button class="btn-icon" title="Bookmark"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M6 3h12v18l-6-4-6 4z"/></svg></button>
+        </div>
+      </div>
+
+      <div class="thread-body" id="threadBody">
+        <div id="connectBanner" style="display:none; margin:auto; text-align:center; max-width:280px;">
+          <div class="text-meta" style="margin-bottom:12px;">Connect SignalWire to pull your live message threads.</div>
+          <button class="btn btn-primary" id="connectBtn">Connect SignalWire</button>
+        </div>
+        <div id="emptyState" class="text-meta" style="margin:auto; display:none;">Pick a conversation on the left to view the thread.</div>
+      </div>
+
+      <div class="composer">
+        <div class="composer-wrap">
+          <button class="composer-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M21.4 11.1l-9 9a5 5 0 01-7-7l9-9a3.5 3.5 0 015 5l-9 9a2 2 0 01-3-3l8-8"/></svg></button>
+          <input type="text" id="composerInput" placeholder="Type your message..." disabled>
+          <button class="composer-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><circle cx="12" cy="12" r="9"/><path d="M8 14s1.5 2 4 2 4-2 4-2M9 9h.01M15 9h.01"/></svg></button>
+          <button class="composer-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><rect x="9" y="2" width="6" height="12" rx="3"/><path d="M5 10a7 7 0 0014 0M12 19v3"/></svg></button>
+          <button class="send-btn" id="sendBtn"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M22 2L11 13M22 2l-7 20-4-9-9-4z"/></svg></button>
+        </div>
+      </div>
+    </div>
+
+    <!-- COL 4: PROFILE INFO -->
+    <div class="panel col-info rise-in">
+      <div class="info-head">
+        <h3>Lead info</h3>
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M18 6L6 18M6 6l12 12"/></svg>
+      </div>
+
+      <div class="profile-card">
+        <div class="avatar profile-avatar" id="profileAvatarWrap"><img id="profileAvatar" src="https://i.pravatar.cc/120?img=51"></div>
+        <div class="profile-name" id="profileName">Select a lead</div>
+        <div class="profile-addr" id="profileAddr"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 10c0 6-9 12-9 12s-9-6-9-12a9 9 0 0118 0z"/><circle cx="12" cy="10" r="3"/></svg><span id="profilePhone">&mdash;</span></div>
+
+        <div class="profile-actions">
+          <button class="btn-icon" title="Call"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M22 16.9v3a2 2 0 01-2.2 2 19.8 19.8 0 01-8.6-3 19.5 19.5 0 01-6-6 19.8 19.8 0 01-3-8.7A2 2 0 014.1 2h3a2 2 0 012 1.7c.1.9.3 1.8.6 2.7a2 2 0 01-.5 2.1L8 9.7a16 16 0 006 6l1.2-1.2a2 2 0 012.1-.5c.9.3 1.8.5 2.7.6a2 2 0 011.7 2z"/></svg></button>
+          <button class="btn-icon" title="Edit notes" id="editNotesBtn"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M12 20h9M16.5 3.5a2.1 2.1 0 013 3L7 19l-4 1 1-4 12.5-12.5z"/></svg></button>
+          <button class="btn btn-dark" style="flex:1;" id="markDeadBtn">Mark dead lead</button>
+        </div>
+
+        <div class="info-list">
+          <div class="info-row">
+            <div class="lbl"><span class="ic" style="background:rgba(52,199,123,0.14);color:#1F9A5C;"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="9"/></svg></span>Status</div>
+            <div class="val" id="infoStatus" style="color:#1F9A5C;">&#9679; &mdash;</div>
+          </div>
+          <div class="info-row">
+            <div class="lbl"><span class="ic" style="background:var(--lavender-hover);color:var(--purple-deep);"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 11l3 3L22 4"/><path d="M21 12v7a2 2 0 01-2 2H5a2 2 0 01-2-2V5a2 2 0 012-2h11"/></svg></span>Market</div>
+            <div class="val" id="infoMarket">&mdash;</div>
+          </div>
+          <div class="info-row">
+            <div class="lbl"><span class="ic" style="background:var(--lavender-hover);color:var(--purple-deep);"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/></svg></span>Last update</div>
+            <div class="val" id="infoLastContact">&mdash;</div>
+          </div>
+          <div class="info-row">
+            <div class="lbl"><span class="ic" style="background:var(--lavender-hover);color:var(--purple-deep);"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="4" width="18" height="17" rx="2"/><path d="M8 2v4M16 2v4M3 10h18"/></svg></span>Campaign</div>
+            <div class="val" id="infoCampaign">&mdash;</div>
+          </div>
+          <div class="info-row">
+            <div class="lbl"><span class="ic" style="background:var(--lavender-hover);color:var(--purple-deep);"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 1v22M17 5H9.5a3.5 3.5 0 000 7h5a3.5 3.5 0 010 7H6"/></svg></span>Deal revenue</div>
+            <div class="val" id="infoRevenue">&mdash;</div>
+          </div>
+        </div>
+
+        <div class="nav-section" style="padding-left:2px;">Notes</div>
+        <textarea id="infoNotes" placeholder="Add a note about this lead..." style="width:100%; min-height:70px; resize:vertical; border:1px solid var(--border); border-radius:12px; padding:10px 12px; font-size:12.5px; font-family:inherit; background:var(--panel-off); color:var(--ink); outline:none;"></textarea>
+        <button class="btn btn-ghost mt-8" id="saveNotesBtn" style="width:100%; font-size:12.5px;">Save note</button>
+
+        <div class="nav-section" style="padding-left:2px;">Preferences</div>
+        <div class="toggle-row">Notifications<div class="mini-switch" id="notifSwitch"></div></div>
+        <a class="nav-link" style="padding-left:2px;color:#D34747;" id="blockBtn"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><circle cx="12" cy="12" r="9"/><path d="M15 9l-6 6"/></svg>Block contact</a>
+      </div>
+    </div>
+
+  </div>
+</div>
+
+<script>
+  let allThreads = [];      // deduped, one row per lead phone, newest message first
+  let activeFilter = 'all';
+  let activePhone = null;
+  let connected = false;
+
+  const STATUS_LABEL = { new: 'New', qualified: 'Qualified', under_contract: 'Under contract', dead: 'Dead lead', pending: 'Pending' };
+  const STATUS_TAG_CLASS = { new: 'new', qualified: 'qualified', under_contract: 'pending', dead: 'dead', pending: 'pending' };
+
+  function avatarSeed(phone){
+    // deterministic pravatar index from phone digits, just for a stable-looking face per lead
+    const digits = (phone || '').replace(/\D/g, '');
+    const n = digits ? (parseInt(digits.slice(-3), 10) % 70) + 1 : 1;
+    return n;
+  }
+
+  function renderThreadList(){
+    const q = (document.getElementById('searchInput').value || '').toLowerCase().trim();
+    let rows = allThreads;
+    if (activeFilter === 'new') rows = rows.filter(t => t.status === 'new');
+    if (activeFilter === 'qualified') rows = rows.filter(t => t.status === 'qualified');
+    if (activeFilter === 'dead') rows = rows.filter(t => t.status === 'dead');
+    if (q) rows = rows.filter(t => (t.name||'').toLowerCase().includes(q) || t.phone.includes(q) || (t.preview||'').toLowerCase().includes(q));
+
+    const scroll = document.getElementById('threadScroll');
+    if (!rows.length){
+      scroll.innerHTML = `<div class="text-meta" style="padding:14px 10px;">No conversations here yet.</div>`;
+      return;
+    }
+    scroll.innerHTML = rows.map((t,i) => `
+      <div class="row t-row rise-in ${t.phone === activePhone ? 'active' : ''}" style="animation-delay:${Math.min(i,10)*0.03}s" data-phone="${t.phone}">
+        <div class="avatar" style="width:42px;height:42px;">
+          <img src="https://i.pravatar.cc/80?img=${avatarSeed(t.phone)}">
+        </div>
+        <div style="flex:1;min-width:0;">
+          <div class="meta-line">
+            <span class="name">${t.name || t.phone}</span>
+            <span class="time">${ZC.timeAgo(t.dateSent)}</span>
+          </div>
+          <div class="preview-line">
+            <span class="preview">${(t.preview || '').replace(/</g,'&lt;')}</span>
+          </div>
+          <div class="tags-row">
+            <span class="tag ${STATUS_TAG_CLASS[t.status] || 'new'}"><span class="tag-dot"></span>${STATUS_LABEL[t.status] || 'New'}</span>
+          </div>
+        </div>
+      </div>
+    `).join('');
+
+    scroll.querySelectorAll('.t-row').forEach(row => {
+      row.addEventListener('click', () => openThread(row.dataset.phone));
+    });
+  }
+
+  function updateCounts(){
+    document.getElementById('countAll').textContent = allThreads.length;
+    document.getElementById('countNew').textContent = allThreads.filter(t=>t.status==='new').length;
+    document.getElementById('countQualified').textContent = allThreads.filter(t=>t.status==='qualified').length;
+    document.getElementById('countDead').textContent = allThreads.filter(t=>t.status==='dead').length;
+    const msgBadge = document.getElementById('railMsgBadge');
+    if (allThreads.length){ msgBadge.style.display = 'flex'; msgBadge.textContent = allThreads.length; }
+  }
+
+  async function loadThreads(){
+    try {
+      const data = await ZC.api('/api/messages');
+      const seen = new Set();
+      allThreads = [];
+      for (const m of data.messages){
+        if (seen.has(m.from)) continue;
+        seen.add(m.from);
+        allThreads.push({
+          phone: m.from, name: m.name, preview: m.body, dateSent: m.dateSent,
+          status: m.status || 'new', tags: m.tags, market: m.market,
+        });
+      }
+      updateCounts();
+      renderThreadList();
+      if (!activePhone && allThreads.length) openThread(allThreads[0].phone);
+    } catch (e) {
+      console.error(e);
+      document.getElementById('threadScroll').innerHTML = `<div class="text-meta" style="padding:14px 10px;">Couldn't load messages: ${e.message}</div>`;
+    }
+  }
+
+  function bubbleHtml(m, leadName, leadPhone){
+    const mine = m.direction === 'outbound';
+    return `
+      <div class="bubble-row ${mine ? 'mine' : ''}">
+        <div class="avatar"><img src="https://i.pravatar.cc/80?img=${mine ? 13 : avatarSeed(leadPhone)}"></div>
+        <div class="bubble">
+          ${!mine ? `<div class="sender">${leadName || leadPhone}</div>` : ''}
+          ${(m.body || '').replace(/</g,'&lt;')}
+          <div class="stamp">${m.dateSent ? new Date(m.dateSent).toLocaleString(undefined,{month:'short',day:'numeric',hour:'2-digit',minute:'2-digit'}) : ''}</div>
+        </div>
+      </div>`;
+  }
+
+  async function openThread(phone){
+    activePhone = phone;
+    renderThreadList();
+    const thread = allThreads.find(t => t.phone === phone);
+    document.getElementById('threadName').textContent = thread?.name || phone;
+    document.getElementById('threadSub').textContent = phone;
+    document.getElementById('threadActions').style.display = 'flex';
+    document.getElementById('emptyState').style.display = 'none';
+    document.getElementById('composerInput').disabled = false;
+
+    const body = document.getElementById('threadBody');
+    body.innerHTML = `<div class="text-meta" style="margin:auto;">Loading thread…</div>`;
+
+    try {
+      const [conv, contact] = await Promise.all([
+        ZC.api('/api/conversation/' + encodeURIComponent(phone)),
+        ZC.api('/api/contacts/' + encodeURIComponent(phone)),
+      ]);
+      body.innerHTML = conv.messages.map(m => bubbleHtml(m, thread?.name, phone)).join('') || `<div class="text-meta" style="margin:auto;">No messages yet with this lead.</div>`;
+      body.scrollTop = body.scrollHeight;
+      renderProfile(phone, contact);
+    } catch (e) {
+      body.innerHTML = `<div class="text-meta" style="margin:auto;">Couldn't load this thread: ${e.message}</div>`;
+    }
+  }
+
+  function renderProfile(phone, contact){
+    document.getElementById('profileAvatar').src = `https://i.pravatar.cc/120?img=${avatarSeed(phone)}`;
+    document.getElementById('profileName').textContent = contact.name || phone;
+    document.getElementById('profilePhone').textContent = phone;
+
+    const status = contact.status || 'new';
+    document.getElementById('infoStatus').innerHTML = `&#9679; ${STATUS_LABEL[status] || status}`;
+    document.getElementById('infoStatus').style.color = status === 'dead' ? '#D34747' : (status === 'qualified' ? '#1F9A5C' : 'var(--ink)');
+    document.getElementById('infoMarket').textContent = contact.market || '—';
+    document.getElementById('infoLastContact').textContent = contact.updated_at ? ZC.timeAgo(contact.updated_at) : '—';
+    document.getElementById('infoCampaign').textContent = contact.campaign_id ? ('#' + contact.campaign_id) : 'Unassigned';
+    document.getElementById('infoRevenue').textContent = ZC.money(contact.revenue);
+    document.getElementById('infoNotes').value = contact.notes || '';
+
+    const select = document.getElementById('statusSelect');
+    select.value = ['new','qualified','under_contract','dead'].includes(status) ? status : 'new';
+    document.getElementById('markDeadBtn').textContent = status === 'dead' ? 'Undo dead lead' : 'Mark dead lead';
+  }
+
+  async function updateStatus(phone, status){
+    try {
+      await ZC.api('/api/contacts/' + encodeURIComponent(phone), { method: 'PUT', body: JSON.stringify({ status }) });
+      const t = allThreads.find(x => x.phone === phone);
+      if (t) t.status = status;
+      updateCounts();
+      renderThreadList();
+      const contact = await ZC.api('/api/contacts/' + encodeURIComponent(phone));
+      renderProfile(phone, contact);
+    } catch (e) {
+      alert('Could not update status: ' + e.message);
+    }
+  }
+
+  document.getElementById('statusSelect').addEventListener('change', (e) => {
+    if (activePhone) updateStatus(activePhone, e.target.value);
+  });
+  document.getElementById('markDeadBtn').addEventListener('click', () => {
+    if (!activePhone) return;
+    const isDead = document.getElementById('markDeadBtn').textContent.includes('Undo');
+    updateStatus(activePhone, isDead ? 'new' : 'dead');
+  });
+  document.getElementById('saveNotesBtn').addEventListener('click', async () => {
+    if (!activePhone) return;
+    try {
+      await ZC.api('/api/contacts/' + encodeURIComponent(activePhone), { method: 'PUT', body: JSON.stringify({ notes: document.getElementById('infoNotes').value }) });
+    } catch (e) { alert('Could not save note: ' + e.message); }
+  });
+  document.getElementById('blockBtn').addEventListener('click', (e) => {
+    e.preventDefault();
+    if (activePhone) updateStatus(activePhone, 'dead');
+  });
+
+  async function sendMessage(){
+    const input = document.getElementById('composerInput');
+    const text = input.value.trim();
+    if (!text || !activePhone) return;
+    input.value = '';
+    const body = document.getElementById('threadBody');
+    body.insertAdjacentHTML('beforeend', bubbleHtml({ direction: 'outbound', body: text, dateSent: new Date().toISOString() }, null, activePhone));
+    body.scrollTop = body.scrollHeight;
+    try {
+      await ZC.api('/api/send', { method: 'POST', body: JSON.stringify({ to: activePhone, body: text }) });
+    } catch (e) {
+      alert('Message failed to send: ' + e.message);
+    }
+  }
+  document.getElementById('sendBtn').addEventListener('click', sendMessage);
+  document.getElementById('composerInput').addEventListener('keydown', (e) => { if (e.key === 'Enter') sendMessage(); });
+
+  document.getElementById('searchInput').addEventListener('input', renderThreadList);
+  document.querySelectorAll('[data-filter]').forEach(link => {
+    link.addEventListener('click', () => {
+      activeFilter = link.dataset.filter;
+      document.querySelectorAll('[data-filter]').forEach(l => l.classList.toggle('active', l === link));
+      renderThreadList();
+    });
+  });
+
+  // collapsible under-contract group
+  const negGroup = document.getElementById('negGroup');
+  const negBody = document.getElementById('negBody');
+  negGroup.addEventListener('click', () => {
+    negGroup.classList.toggle('open');
+    negBody.style.maxHeight = negGroup.classList.contains('open') ? '120px' : '0px';
+    negBody.style.opacity = negGroup.classList.contains('open') ? '1' : '0';
+  });
+
+  document.getElementById('notifSwitch').addEventListener('click', function(){ this.classList.toggle('off'); });
+
+  ZC.wireLogout('#logoutBtn');
+
+  async function init(){
+    const user = await ZC.requireAuth();
+    if (!user) return;
+    const status = await ZC.ensureConnected();
+    connected = status.connected;
+    if (!connected){
+      document.getElementById('connectBanner').style.display = 'block';
+      document.getElementById('connectBtn').addEventListener('click', () => ZC.openConnectModal(() => { document.getElementById('connectBanner').style.display='none'; loadThreads(); }));
+      document.getElementById('threadScroll').innerHTML = `<div class="text-meta" style="padding:14px 10px;">Connect SignalWire to see your leads.</div>`;
+      return;
+    }
+    document.getElementById('emptyState').style.display = 'block';
+    loadThreads();
+  }
+  init();
+</script>
+</body>
+</html>

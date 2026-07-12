@@ -1,0 +1,332 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Zocalo Capital — Sign in</title>
+<link rel="stylesheet" href="styles.css">
+<style>
+  body{ background: var(--purple-wash); }
+  .auth-shell{
+    min-height:100vh; display:flex; align-items:center; justify-content:center;
+    padding: 24px;
+    background:
+      radial-gradient(circle at 12% 15%, rgba(255,255,255,0.35), transparent 45%),
+      var(--purple-wash);
+  }
+  .auth-card{
+    width: 100%; max-width: 920px; min-height: 580px;
+    display:grid; grid-template-columns: 1fr 1fr;
+    background: var(--panel);
+    border-radius: 26px;
+    overflow:hidden;
+    box-shadow: var(--shadow-panel);
+    border: 1px solid var(--border-soft);
+  }
+  .auth-form{ padding: 52px 56px; display:flex; flex-direction:column; }
+  .auth-brand{ display:flex; align-items:center; gap:10px; margin-bottom: 44px; }
+  .auth-brand img{ height: 22px; width:auto; }
+  .auth-brand span{ font-family: var(--font-display); font-weight:700; font-size:15px; letter-spacing:0.01em; }
+
+  .auth-toggle{
+    display:inline-flex; background: var(--lavender-hover); border-radius: 999px;
+    padding:4px; width: fit-content; margin-bottom: 30px; position:relative;
+  }
+  .auth-toggle button{
+    padding: 9px 22px; border-radius: 999px; font-size:13px; font-weight:600;
+    color: var(--meta); position:relative; z-index:1; transition: color .3s var(--ease);
+    white-space:nowrap;
+  }
+  .auth-toggle .thumb{
+    position:absolute; top:4px; left:4px; height: calc(100% - 8px);
+    width: calc(50% - 4px); border-radius:999px;
+    background: linear-gradient(155deg, var(--purple), var(--purple-deep));
+    transition: transform .35s var(--ease);
+    box-shadow: 0 8px 18px -6px rgba(124,111,232,0.55);
+  }
+  .auth-toggle[data-mode="signup"] .thumb{ transform: translateX(100%); }
+  .auth-toggle button.is-active{ color:#fff; }
+
+  h1.auth-title{ font-size: 26px; margin-bottom: 6px; }
+  .auth-sub{ color: var(--meta); font-size: 13.5px; margin-bottom: 32px; }
+
+  .field{ margin-bottom: 18px; }
+  .field label{ display:block; font-size:12.5px; font-weight:600; color: var(--ink-soft); margin-bottom:7px; }
+  .field .input-wrap{
+    display:flex; align-items:center; gap:10px;
+    background: var(--panel-off); border: 1px solid var(--border);
+    border-radius: 13px; padding: 12px 15px;
+    transition: box-shadow .2s var(--ease), border-color .2s var(--ease);
+  }
+  .field .input-wrap:focus-within{ box-shadow: 0 0 0 3px rgba(124,111,232,0.16); border-color: var(--purple); }
+  .field svg{ width:16px; height:16px; color: var(--meta); flex:0 0 auto; }
+  .field input{ border:none; outline:none; background:transparent; width:100%; font-size:14px; color:var(--ink); }
+  .field input::placeholder{ color: var(--meta-quiet); }
+  .field .toggle-vis{ cursor:pointer; color: var(--meta); }
+
+  .row-between{ display:flex; align-items:center; justify-content:space-between; margin: -6px 0 26px; }
+  .remember{ display:flex; align-items:center; gap:8px; font-size:12.5px; color: var(--meta); }
+  .remember input{ width:15px; height:15px; accent-color: var(--purple); }
+  .forgot{ font-size:12.5px; font-weight:600; color: var(--purple-deep); }
+  .forgot:hover{ text-decoration: underline; }
+
+  .signup-fields{ display:grid; grid-template-columns:1fr 1fr; gap:14px; }
+
+  .submit-btn{ width:100%; padding: 14px; font-size:14.5px; margin-top: 4px; }
+
+  .divider{ display:flex; align-items:center; gap:12px; margin: 26px 0; color: var(--meta-quiet); font-size:12px; }
+  .divider::before, .divider::after{ content:''; flex:1; height:1px; background: var(--border); }
+
+  .sso-row{ display:flex; gap:12px; }
+  .sso-btn{
+    flex:1; display:flex; align-items:center; justify-content:center; gap:8px;
+    padding: 11px; border: 1px solid var(--border); border-radius: 13px;
+    font-size:13px; font-weight:600; transition: background .2s var(--ease), transform .15s var(--ease);
+  }
+  .sso-btn:hover{ background: var(--lavender-hover); }
+  .sso-btn:active{ transform: scale(.97); }
+  .sso-btn svg{ width:16px; height:16px; }
+
+  .switch-hint{ margin-top: auto; padding-top: 28px; text-align:center; font-size:13px; color: var(--meta); }
+  .switch-hint a{ color: var(--purple-deep); font-weight:600; }
+  .switch-hint a:hover{ text-decoration: underline; }
+
+  .auth-visual{
+    position:relative; overflow:hidden;
+    background:
+      radial-gradient(circle at 30% 20%, rgba(255,255,255,0.18), transparent 55%),
+      linear-gradient(155deg, var(--purple) 0%, var(--purple-deep) 55%, #4C3FB8 100%);
+    display:flex; flex-direction:column; justify-content:space-between;
+    padding: 40px;
+  }
+  .auth-visual::before{
+    content:'';
+    position:absolute; inset:0;
+    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='500' height='500' viewBox='0 0 500 500'%3E%3Cpath d='M0 80 C 100 20, 160 140, 260 80 S 420 20, 500 80' stroke='%23ffffff' stroke-opacity='0.14' fill='none' stroke-width='1.6'/%3E%3Cpath d='M0 180 C 100 120, 160 240, 260 180 S 420 120, 500 180' stroke='%23ffffff' stroke-opacity='0.10' fill='none' stroke-width='1.6'/%3E%3Cpath d='M0 300 C 100 240, 160 360, 260 300 S 420 240, 500 300' stroke='%23ffffff' stroke-opacity='0.12' fill='none' stroke-width='1.6'/%3E%3Cpath d='M0 420 C 100 360, 160 480, 260 420 S 420 360, 500 420' stroke='%23ffffff' stroke-opacity='0.08' fill='none' stroke-width='1.6'/%3E%3C/svg%3E");
+    background-size: cover;
+  }
+  .auth-visual .mark{ position:relative; z-index:1; }
+  .auth-visual .mark img{ height: 30px; filter: brightness(0) invert(1); opacity:.95; }
+  .auth-visual .pitch{ position:relative; z-index:1; }
+  .auth-visual .pitch h2{ color:#fff; font-size: 27px; line-height:1.3; max-width: 320px; }
+  .auth-visual .pitch p{ color: rgba(255,255,255,0.78); font-size:13.5px; margin-top:12px; max-width: 300px; line-height:1.6; }
+
+  .stat-strip{ position:relative; z-index:1; display:flex; gap:22px; margin-top: 28px; }
+  .stat-strip div{ color:#fff; }
+  .stat-strip .num{ font-family: var(--font-display); font-size:20px; font-weight:700; }
+  .stat-strip .lbl{ font-size:11px; color: rgba(255,255,255,0.72); margin-top:2px; }
+
+  @media (max-width: 760px){
+    .auth-card{ grid-template-columns: 1fr; }
+    .auth-visual{ display:none; }
+    .auth-form{ padding: 40px 28px; }
+    .signup-fields{ grid-template-columns:1fr; }
+  }
+</style>
+</head>
+<body>
+<div class="auth-shell">
+  <div class="auth-card rise-in">
+
+    <div class="auth-form">
+      <div class="auth-brand">
+        <img src="assets/logo-light.jpeg" alt="Zocalo Capital">
+        <span>ZOCALO CAPITAL</span>
+      </div>
+
+      <div class="auth-toggle" id="authToggle" data-mode="signin">
+        <div class="thumb"></div>
+        <button type="button" class="is-active" data-target="signin">Sign in</button>
+        <button type="button" data-target="signup">Create account</button>
+      </div>
+
+      <div class="auth-error" id="authError" style="display:none;color:#D34747;font-size:12.5px;margin:-14px 0 16px;background:rgba(239,110,110,0.1);padding:10px 12px;border-radius:10px;"></div>
+
+      <!-- SIGN IN -->
+      <div id="paneSignin">
+        <h1 class="auth-title">Welcome back</h1>
+        <p class="auth-sub">Sign in to pick up your deal pipeline where you left off.</p>
+
+        <div class="field">
+          <label for="siEmail">Email address</label>
+          <div class="input-wrap">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M3 6h18v12H3z"/><path d="M3 7l9 6 9-6"/></svg>
+            <input id="siEmail" type="email" placeholder="you@zocalocapital.com" autocomplete="email">
+          </div>
+        </div>
+        <div class="field">
+          <label for="siPass">Password</label>
+          <div class="input-wrap">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><rect x="4" y="10" width="16" height="10" rx="2"/><path d="M8 10V7a4 4 0 018 0v3"/></svg>
+            <input id="siPass" type="password" placeholder="Enter your password" autocomplete="current-password">
+            <svg class="toggle-vis" data-for="siPass" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M1 12s4-7 11-7 11 7 11 7-4 7-11 7-11-7-11-7z"/><circle cx="12" cy="12" r="3"/></svg>
+          </div>
+        </div>
+
+        <div class="row-between">
+          <label class="remember"><input type="checkbox"> Keep me signed in</label>
+          <a href="#" class="forgot">Forgot password?</a>
+        </div>
+
+        <button class="btn btn-primary submit-btn" id="signinBtn">Sign in</button>
+
+        <div class="divider">OR CONTINUE WITH</div>
+        <div class="sso-row">
+          <button class="sso-btn"><svg viewBox="0 0 24 24"><path fill="#4285F4" d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92a5.06 5.06 0 01-2.2 3.32v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.1z"/><path fill="#34A853" d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.99.66-2.26 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.85A10.99 10.99 0 0012 23z"/><path fill="#FBBC05" d="M5.84 14.1a6.6 6.6 0 010-4.2V7.05H2.18a11 11 0 000 9.9l3.66-2.85z"/><path fill="#EA4335" d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1a10.99 10.99 0 00-9.82 6.05l3.66 2.85C6.71 7.31 9.14 5.38 12 5.38z"/></svg> Google</button>
+          <button class="sso-btn"><svg viewBox="0 0 24 24" fill="currentColor"><path d="M16.365 1.43c0 1.14-.475 2.166-1.24 2.968-.847.9-2.225 1.598-3.402 1.502-.14-1.096.463-2.264 1.203-2.99.83-.83 2.24-1.44 3.44-1.48zM20.63 17.243c-.505 1.157-1.11 2.246-1.85 3.26-1.017 1.393-2.077 2.786-3.746 2.815-1.635.03-2.16-.964-4.03-.964-1.87 0-2.454.935-4.002.995-1.61.06-2.836-1.502-3.86-2.89-2.098-2.827-3.7-7.986-1.55-11.47 1.07-1.727 2.98-2.82 5.06-2.85 1.577-.03 3.066 1.058 4.03 1.058.964 0 2.77-1.31 4.67-1.117.795.033 3.03.32 4.46 2.417-.115.072-2.664 1.554-2.636 4.635.03 3.68 3.226 4.9 3.26 4.916z"/></svg> Apple</button>
+        </div>
+      </div>
+
+      <!-- SIGN UP -->
+      <div id="paneSignup" style="display:none;">
+        <h1 class="auth-title">Create your account</h1>
+        <p class="auth-sub">Set up Zocalo Capital CRM for your team in under a minute.</p>
+
+        <div class="signup-fields">
+          <div class="field">
+            <label for="suFirst">First name</label>
+            <div class="input-wrap"><input id="suFirst" placeholder="Elroy"></div>
+          </div>
+          <div class="field">
+            <label for="suLast">Last name</label>
+            <div class="input-wrap"><input id="suLast" placeholder="Struct"></div>
+          </div>
+        </div>
+        <div class="field">
+          <label for="suEmail">Work email</label>
+          <div class="input-wrap">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M3 6h18v12H3z"/><path d="M3 7l9 6 9-6"/></svg>
+            <input id="suEmail" type="email" placeholder="you@zocalocapital.com">
+          </div>
+        </div>
+        <div class="field">
+          <label for="suPass">Password</label>
+          <div class="input-wrap">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><rect x="4" y="10" width="16" height="10" rx="2"/><path d="M8 10V7a4 4 0 018 0v3"/></svg>
+            <input id="suPass" type="password" placeholder="Create a password">
+            <svg class="toggle-vis" data-for="suPass" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M1 12s4-7 11-7 11 7 11 7-4 7-11 7-11-7-11-7z"/><circle cx="12" cy="12" r="3"/></svg>
+          </div>
+        </div>
+
+        <div class="field">
+          <label for="suPin">Sign-up PIN</label>
+          <div class="input-wrap">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><rect x="3" y="11" width="18" height="10" rx="2"/><path d="M7 11V7a5 5 0 0110 0v4"/></svg>
+            <input id="suPin" inputmode="numeric" placeholder="Ask Elroy for the invite PIN">
+          </div>
+        </div>
+
+        <label class="remember" style="margin-bottom:22px;">
+          <input type="checkbox" id="suAgree"> I agree to the <a href="#" class="forgot" style="margin-left:3px;">Terms</a>&nbsp;and&nbsp;<a href="#" class="forgot">Privacy Policy</a>
+        </label>
+
+        <button class="btn btn-primary submit-btn" id="signupBtn">Create account</button>
+      </div>
+
+      <div class="switch-hint" id="switchHint">
+        Don't have an account? <a href="#" id="hintLink">Create one</a>
+      </div>
+    </div>
+
+    <div class="auth-visual">
+      <div class="mark"><img src="assets/logo-light.jpeg" alt=""></div>
+      <div class="pitch">
+        <h2>Every deal, every lead, one load&#8209;bearing view.</h2>
+        <p>Track off&#8209;market sourcing, SMS campaigns, and assignment contracts across Ohio, Houston, and beyond &mdash; without losing a single thread.</p>
+        <div class="stat-strip">
+          <div><div class="num">2,140</div><div class="lbl">Active leads</div></div>
+          <div><div class="num">86%</div><div class="lbl">Response rate</div></div>
+          <div><div class="num">$4.2M</div><div class="lbl">Pipeline value</div></div>
+        </div>
+      </div>
+    </div>
+
+  </div>
+</div>
+
+<script src="app-common.js"></script>
+<script>
+  const toggle = document.getElementById('authToggle');
+  const paneSignin = document.getElementById('paneSignin');
+  const paneSignup = document.getElementById('paneSignup');
+  const hint = document.getElementById('switchHint');
+  const hintLink = document.getElementById('hintLink');
+  const errorBox = document.getElementById('authError');
+
+  function showError(msg){
+    errorBox.textContent = msg;
+    errorBox.style.display = 'block';
+  }
+  function clearError(){
+    errorBox.style.display = 'none';
+  }
+
+  function setMode(mode){
+    clearError();
+    toggle.dataset.mode = mode;
+    toggle.querySelectorAll('button').forEach(b => b.classList.toggle('is-active', b.dataset.target === mode));
+    const signin = mode === 'signin';
+    paneSignin.style.display = signin ? 'block' : 'none';
+    paneSignup.style.display = signin ? 'none' : 'block';
+    hint.innerHTML = signin
+      ? 'Don\'t have an account? <a href="#" id="hintLink">Create one</a>'
+      : 'Already have an account? <a href="#" id="hintLink">Sign in</a>';
+    document.getElementById('hintLink').addEventListener('click', e => { e.preventDefault(); setMode(signin ? 'signup' : 'signin'); });
+  }
+  toggle.querySelectorAll('button').forEach(b => b.addEventListener('click', () => setMode(b.dataset.target)));
+  hintLink.addEventListener('click', e => { e.preventDefault(); setMode('signup'); });
+
+  document.querySelectorAll('.toggle-vis').forEach(icon => {
+    icon.addEventListener('click', () => {
+      const input = document.getElementById(icon.dataset.for);
+      input.type = input.type === 'password' ? 'text' : 'password';
+    });
+  });
+
+  function setBusy(btn, busy, label){
+    btn.disabled = busy;
+    btn.style.opacity = busy ? 0.7 : 1;
+    btn.textContent = busy ? 'Please wait…' : label;
+  }
+
+  document.getElementById('signinBtn').addEventListener('click', async () => {
+    clearError();
+    const email = document.getElementById('siEmail').value.trim();
+    const password = document.getElementById('siPass').value;
+    if (!email || !password) { showError('Enter your email and password.'); return; }
+    const btn = document.getElementById('signinBtn');
+    setBusy(btn, true, 'Sign in');
+    try {
+      await ZC.api('/api/auth/login', { method: 'POST', body: JSON.stringify({ email, password }) });
+      window.location.href = '/dashboard';
+    } catch (e) {
+      showError(e.message);
+      setBusy(btn, false, 'Sign in');
+    }
+  });
+
+  document.getElementById('signupBtn').addEventListener('click', async () => {
+    clearError();
+    const name = `${document.getElementById('suFirst').value.trim()} ${document.getElementById('suLast').value.trim()}`.trim();
+    const email = document.getElementById('suEmail').value.trim();
+    const password = document.getElementById('suPass').value;
+    const pin = document.getElementById('suPin').value.trim();
+    const agree = document.getElementById('suAgree').checked;
+    if (!name || !email || !password || !pin) { showError('Fill in every field, including the invite PIN.'); return; }
+    if (!agree) { showError('Please agree to the Terms and Privacy Policy first.'); return; }
+    const btn = document.getElementById('signupBtn');
+    setBusy(btn, true, 'Create account');
+    try {
+      await ZC.api('/api/auth/signup', { method: 'POST', body: JSON.stringify({ name, email, password, pin }) });
+      window.location.href = '/dashboard';
+    } catch (e) {
+      showError(e.message);
+      setBusy(btn, false, 'Create account');
+    }
+  });
+
+  // Already signed in? Skip straight to the dashboard.
+  ZC.api('/api/auth/me').then(d => { if (d.user) window.location.href = '/dashboard'; }).catch(()=>{});
+</script>
+</body>
+</html>
