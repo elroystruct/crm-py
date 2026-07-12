@@ -4,6 +4,9 @@
 <meta charset="UTF-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1.0" />
 <title>Zócalo Capital CRM</title>
+<meta name="description" content="Zócalo Capital CRM tracks leads, SMS campaigns, and deal pipeline in one place, from first inbound text to closed contract." />
+<link rel="icon" type="image/png" href="/assets/logo-black-crop.png" />
+<link rel="apple-touch-icon" href="/assets/logo-black-crop.png" />
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;600;700&family=Inter:wght@400;500;600&display=swap" rel="stylesheet">
 <link rel="preconnect" href="https://fonts.googleapis.com">
@@ -144,6 +147,7 @@
     letter-spacing: 0.01em;
   }
   .brand .dot { width: 9px; height: 9px; border-radius: 50%; background: linear-gradient(155deg, var(--purple), var(--purple-deep)); box-shadow: 0 0 0 4px var(--lavender-hover); }
+  .brand .brand-mark { width: 24px; height: 24px; object-fit: contain; }
   .brand small { color: var(--text-muted); font-weight: 600; font-size: 10.5px; letter-spacing: 0.08em; text-transform: uppercase; margin-left: 6px; }
 
   .conn {
@@ -353,9 +357,10 @@
   .tier-tab.active { color: var(--text); background: var(--panel); box-shadow: var(--shadow-float); font-weight: 700; }
 
   .data-table { width: 100%; border-collapse: collapse; font-size: 12.5px; margin-top: 4px; }
-  .data-table th { text-align: left; padding: 8px 10px; font-family: var(--sans); font-size: 10.5px; font-weight: 700; text-transform: uppercase; letter-spacing: .04em; color: var(--text-muted); border-bottom: 1px solid var(--border); }
-  .data-table td { padding: 9px 10px; border-bottom: 1px solid var(--border); font-family: var(--sans); }
+  .data-table th { text-align: left; padding: 10px 12px; font-family: var(--sans); font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: .04em; color: var(--text-muted); border-bottom: 1px solid var(--border); }
+  .data-table td { padding: 12px; border-bottom: 1px solid var(--border); font-family: var(--sans); font-size: 13px; }
   .data-table tr:last-child td { border-bottom: none; }
+  .data-table tbody tr:hover td { background: var(--lavender-hover); }
 
   /* ---------- campaign manager ---------- */
   .campaign-item {
@@ -635,7 +640,7 @@
     border-bottom-left-radius: 5px; box-shadow: var(--shadow-float);
   }
   .chat-row.out .chat-bubble {
-    background: linear-gradient(155deg, var(--purple), var(--purple-deep)); color: #fff;
+    background: linear-gradient(155deg, var(--lavender-tint), var(--lavender-hover)); color: var(--text);
     border-bottom-right-radius: 5px;
   }
   .chat-meta {
@@ -652,12 +657,20 @@
     flex: 0 0 auto; border-top: 1px solid var(--border); padding: 14px 22px;
     background: var(--panel);
   }
-  .lead-chat-composer .row { display: flex; gap: 8px; align-items: flex-end; }
-  .lead-chat-composer textarea {
-    flex: 1; min-height: 42px; max-height: 120px; resize: none; margin: 0;
-    border-radius: var(--r-card);
+  .lead-chat-composer .row {
+    display: flex; gap: 8px; align-items: center;
+    background: var(--panel-alt); border: 1px solid var(--border);
+    border-radius: 18px; padding: 6px 6px 6px 16px;
   }
-  .lead-chat-composer .btn { flex: 0 0 auto; padding: 11px 18px; }
+  .lead-chat-composer textarea {
+    flex: 1; min-height: 22px; max-height: 90px; resize: none; margin: 0;
+    background: transparent; border: none; padding: 8px 0;
+  }
+  .lead-chat-composer textarea:focus { box-shadow: none; }
+  .lead-chat-composer .btn {
+    flex: 0 0 auto; width: 38px; height: 38px; padding: 0; border-radius: 12px;
+    display: flex; align-items: center; justify-content: center;
+  }
   .lead-detail-col {
     flex: 0 0 auto; width: 100%; overflow-y: auto; padding: 22px; background: var(--panel);
   }
@@ -773,12 +786,42 @@
   .hero-status-chip.live{ background:rgba(52,199,123,0.13); color:#1F9A5C; }
   .hero-status-chip.paused{ background:rgba(242,153,74,0.15); color:#C6791F; }
   @media (max-width: 1000px){ .hero-kpi-grid{ grid-template-columns:repeat(2,1fr); } .hero-grid-2{ grid-template-columns:1fr; } }
+
+  .lead-detail-section {
+    background: var(--panel-alt); border: 1px solid var(--border); border-radius: var(--r-card);
+    padding: 16px; margin-bottom: 14px;
+  }
+  .lead-detail-heading {
+    font-family: var(--sans); font-size: 11px; font-weight: 700; text-transform: uppercase;
+    letter-spacing: 0.06em; color: var(--purple-deep); margin-bottom: 14px;
+  }
+  .lead-detail-section .field:last-child { margin-bottom: 0; }
+
+  .connect-gate .connect-icon {
+    width: 46px; height: 46px; border-radius: 14px; margin-bottom: 16px;
+    background: linear-gradient(155deg, var(--purple), var(--purple-deep));
+    display: flex; align-items: center; justify-content: center; box-shadow: 0 10px 22px -8px rgba(124,111,232,0.5);
+  }
+  .connect-gate .connect-icon svg { width: 22px; height: 22px; color: #fff; }
+
+  .account-menu-header { display:flex; align-items:center; gap:10px; padding:8px 10px 12px; border-bottom:1px solid var(--border); margin-bottom:6px; }
+  .account-menu-header .avatar { width:34px; height:34px; }
+  .account-menu-header .who { min-width:0; }
+  .account-menu-header .who-name { font-size:12.5px; font-weight:700; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; max-width:150px; }
+  .account-menu-header .who-email { font-size:11px; color:var(--text-dim); overflow:hidden; text-overflow:ellipsis; white-space:nowrap; max-width:150px; }
+
+  .info-list .info-row{ display:flex; align-items:center; justify-content:space-between; padding: 10px 2px; border-bottom: 1px solid var(--border); }
+  .info-list .info-row:last-child{ border-bottom:none; }
+  .info-row .lbl{ display:flex; align-items:center; gap:9px; font-size:12.5px; color: var(--text-muted); }
+  .info-row .lbl .ic{ width:26px; height:26px; border-radius:8px; display:flex; align-items:center; justify-content:center; background:var(--lavender-hover); color:var(--purple-deep); flex:0 0 auto; }
+  .info-row .lbl .ic svg{ width:13px; height:13px; }
+  .info-row .val{ font-size:12.5px; font-weight:700; text-align:right; }
 </style>
 </head>
 <body>
 
 <div class="topbar" id="topbarEl">
-  <div class="brand"><span class="dot"></span>ZÓCALO CAPITAL<small>CRM</small></div>
+  <div class="brand"><img src="/assets/logo-black-crop.png" alt="" class="brand-mark" />ZÓCALO CAPITAL<small>CRM</small></div>
   <div class="conn">
     <div class="signal-bars" id="signalBars"><div class="bar"></div><div class="bar"></div><div class="bar"></div><div class="bar"></div></div>
     <span id="connLabel">not connected</span>
@@ -794,6 +837,13 @@
         </div>
       </div>
       <div class="account-menu" id="accountMenu">
+        <div class="account-menu-header">
+          <div class="avatar" id="accountMenuAvatar"></div>
+          <div class="who">
+            <div class="who-name" id="accountMenuName"></div>
+            <div class="who-email" id="accountMenuEmail"></div>
+          </div>
+        </div>
         <label class="account-menu-item" for="avatarFileInput">Change profile picture</label>
         <input type="file" id="avatarFileInput" accept="image/*" style="display:none;" />
         <div class="account-menu-item" id="removeAvatarItem">Remove profile picture</div>
@@ -912,7 +962,7 @@ function initials(name) {
 function renderAvatar(el, user) {
   el.innerHTML = user && user.avatar
     ? `<img src="${user.avatar}" alt="" />`
-    : initials(user ? user.name : '');
+    : `<img src="/assets/default-avatar.png" alt="" />`;
 }
 
 function renderAccountCard() {
@@ -920,6 +970,12 @@ function renderAccountCard() {
   accountCard.style.display = 'block';
   renderAvatar(accountAvatar, state.user);
   accountName.textContent = (state.user.name || '').split(' ')[0] || state.user.email;
+  const menuAvatar = document.getElementById('accountMenuAvatar');
+  const menuName = document.getElementById('accountMenuName');
+  const menuEmail = document.getElementById('accountMenuEmail');
+  if (menuAvatar) renderAvatar(menuAvatar, state.user);
+  if (menuName) menuName.textContent = state.user.name || 'Account';
+  if (menuEmail) menuEmail.textContent = state.user.email || '';
 }
 
 accountTrigger.addEventListener('click', (e) => {
@@ -988,7 +1044,7 @@ function renderAuthGate(mode, errorMsg) {
       <div class="auth-card rise-in">
         <div class="auth-form-col">
           <div class="auth-brand">
-            <span class="dot"></span>
+            <img src="/assets/logo-black-crop.png" alt="" class="brand-mark" style="width:30px;height:30px;" />
             <div><div class="name">ZÓCALO CAPITAL</div><div class="sub">CRM</div></div>
           </div>
           <div class="auth-tabs">
@@ -998,7 +1054,7 @@ function renderAuthGate(mode, errorMsg) {
           <h1 style="font-size:26px;margin-bottom:6px;">${isSignup ? 'Create your account' : 'Welcome back'}</h1>
           <p style="color:var(--text-muted);font-size:13.5px;margin-bottom:28px;">${isSignup ? 'Set up Zócalo Capital CRM for your team in under a minute.' : 'Sign in to pick up your deal pipeline where you left off.'}</p>
           ${isSignup ? `
-            <div class="field"><label>Name</label><input type="text" id="authName" placeholder="Matt Thorne" /></div>
+            <div class="field"><label>Name</label><input type="text" id="authName" placeholder="Elroy Struct" /></div>
             <div class="field"><label>Email</label><input type="text" id="authEmail" placeholder="you@zocalocapital.com" /></div>
             <div class="field"><label>Password</label><input type="password" id="authPassword" placeholder="At least 6 characters" /></div>
             <div class="field"><label>Sign-up PIN</label><input type="text" id="authPin" placeholder="Ask for the invite PIN" /></div>
@@ -1012,7 +1068,7 @@ function renderAuthGate(mode, errorMsg) {
           ${errorMsg ? `<div class="error-msg">${errorMsg}</div>` : ''}
         </div>
         <div style="position:relative;overflow:hidden;background:radial-gradient(circle at 30% 20%, rgba(255,255,255,0.18), transparent 55%), linear-gradient(155deg, var(--purple) 0%, var(--purple-deep) 55%, #4C3FB8 100%);display:flex;flex-direction:column;justify-content:space-between;padding:40px;">
-          <div style="position:relative;z-index:1;font-family:var(--display);font-weight:800;color:#fff;font-size:15px;letter-spacing:0.02em;">ZÓCALO CAPITAL</div>
+          <div style="position:relative;z-index:1;display:flex;align-items:center;gap:9px;font-family:var(--display);font-weight:800;color:#fff;font-size:15px;letter-spacing:0.02em;"><img src="/assets/logo-white-crop.png" alt="" style="width:26px;height:26px;" />ZÓCALO CAPITAL</div>
           <div style="position:relative;z-index:1;">
             <h2 style="color:#fff;font-size:26px;line-height:1.3;max-width:320px;">Every deal, every lead, one load bearing view.</h2>
             <p style="color:rgba(255,255,255,0.8);font-size:13.5px;margin-top:12px;max-width:300px;line-height:1.6;">Track off&#8209;market sourcing, SMS campaigns, and assignment contracts without losing a single thread.</p>
@@ -1071,6 +1127,7 @@ async function init() {
 function renderConnectGate(errorMsg) {
   app.innerHTML = `
     <div class="connect-gate">
+      <div class="connect-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M6.5 6.5l11 11M9 4l2 2-3 3-2-2a4 4 0 010-5.66 4 4 0 015.66 0zM15 20l-2-2 3-3 2 2a4 4 0 010 5.66 4 4 0 01-5.66 0z"/></svg></div>
       <h2>Connect to SignalWire</h2>
       <p>Enter your Space, Project ID, and Auth Token. These stay in server memory for this session only, never written to disk or sent anywhere but SignalWire's API.</p>
       <div class="field"><label>SPACE (e.g. cruz-associates-llc)</label><input type="text" id="inSpace" placeholder="yourspace" /></div>
@@ -1105,8 +1162,8 @@ function renderCrmShell() {
   app.innerHTML = `
     <div class="crm-shell">
       <nav class="app-rail">
-        <div style="width:34px;height:34px;border-radius:10px;background:linear-gradient(155deg, var(--purple), var(--purple-deep));display:flex;align-items:center;justify-content:center;margin-bottom:16px;flex:0 0 auto;">
-          <span style="color:#fff;font-family:var(--display);font-weight:800;font-size:14px;">Z</span>
+        <div style="width:34px;height:34px;border-radius:10px;background:linear-gradient(155deg, var(--purple), var(--purple-deep));display:flex;align-items:center;justify-content:center;margin-bottom:16px;flex:0 0 auto;overflow:hidden;">
+          <img src="/assets/logo-white-crop.png" alt="" style="width:20px;height:20px;" />
         </div>
         <button class="rail-item ${state.view === 'inbox' ? 'active' : ''}" id="tabInbox" title="Inbox">
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M21 15a2 2 0 01-2 2H7l-4 4V5a2 2 0 012-2h14a2 2 0 012 2z"/></svg>
@@ -1349,12 +1406,12 @@ function renderDashboardHero(d, a) {
   const campRows = camps.length ? camps.map(c => {
     const initials = (c.market || c.name || '??').slice(0,2).toUpperCase();
     const live = !c.fatigued;
-    const trend = c.delta === null ? '—' : `<span style="color:${c.delta>=0?'#1F9A5C':'#D34747'}">${c.delta>=0?'▲':'▼'} ${Math.abs(c.delta)}pt</span>`;
+    const trend = c.delta === null ? 'N/A' : `<span style="color:${c.delta>=0?'#1F9A5C':'#D34747'}">${c.delta>=0?'▲':'▼'} ${Math.abs(c.delta)}pt</span>`;
     return `<tr>
       <td><div class="hero-campaign-name"><div class="hero-campaign-swatch">${initials}</div>${c.name}</div></td>
-      <td>${c.market || '—'}</td>
+      <td>${c.market || 'N/A'}</td>
       <td>${c.thisWeekInbound}</td>
-      <td>${c.thisWeekRate===null?'—':c.thisWeekRate+'%'}</td>
+      <td>${c.thisWeekRate===null?'N/A':c.thisWeekRate+'%'}</td>
       <td>${trend}</td>
       <td><span class="hero-status-chip ${live?'live':'paused'}">&#9679; ${live?'Healthy':'Fatigued'}</span></td>
     </tr>`;
@@ -1362,7 +1419,7 @@ function renderDashboardHero(d, a) {
 
   return `
     <div class="dash-hero-head">
-      <div><div class="day" style="margin-top:10px;">${new Date().toLocaleDateString(undefined,{weekday:'long',year:'numeric',month:'long',day:'numeric'})}</div><h2>Welcome back, <span data-user-first>${(state.user && state.user.name) ? state.user.name.split(' ')[0] : 'there'}</span></h2></div>
+      <div><div class="day">${new Date().toLocaleDateString(undefined,{weekday:'long',year:'numeric',month:'long',day:'numeric'})}</div><h2>Welcome back, <span data-user-first>${(state.user && state.user.name) ? state.user.name.split(' ')[0] : 'there'}</span></h2></div>
     </div>
     <div class="hero-kpi-grid">
       <div class="hero-kpi-card">
@@ -1402,7 +1459,7 @@ function renderDashboardHero(d, a) {
             <path d="M20 120 A90 90 0 0 1 200 120" fill="none" stroke="var(--lavender-hover)" stroke-width="16" stroke-linecap="round"/>
             <path d="M20 120 A90 90 0 0 1 200 120" fill="none" stroke="#7C6FE8" stroke-width="16" stroke-linecap="round" stroke-dasharray="282.6" stroke-dashoffset="${offset}"/>
           </svg>
-          <div class="gauge-num">${acc===null?'—':acc}<span style="font-size:14px;color:var(--text-muted);font-weight:600;">/100</span></div>
+          <div class="gauge-num">${acc===null?'N/A':acc}<span style="font-size:14px;color:var(--text-muted);font-weight:600;">/100</span></div>
           <div class="gauge-lbl">Skip-trace accuracy</div>
         </div>
         <div class="gauge-split">${gaugeSplit}</div>
@@ -1483,7 +1540,7 @@ function renderDashboard() {
           </div>
           <div class="chart-card">
             <h4>Daily volume</h4>
-            <div class="chart-note">Inbound (green) vs replies sent (blue), last 30 days.</div>
+            <div class="chart-note">Inbound (purple) vs replies sent (blue), last 30 days.</div>
             ${renderDailyChart(a.dailyVolume)}
           </div>
         </div>
@@ -1560,7 +1617,7 @@ function renderDashboard() {
           <input type="text" id="rateInboundInput" value="${rates.sms_cost_inbound}" />
         </div>
         <button class="btn" id="saveRatesBtn">Save rates</button>
-        <div id="saveRatesStatus" style="font-family:var(--mono); font-size:11px; margin-top:8px;"></div>
+        <div id="saveRatesStatus" style="font-size:11px; margin-top:8px;"></div>
       </div>
     `;
     document.getElementById('kpiAllTimeBtn')?.addEventListener('click', () => { state.kpiPeriod = 'allTime'; renderDashboard(); });
@@ -1618,7 +1675,7 @@ function renderDashboard() {
       </div>
       <div class="chart-card">
         <h4>Carrier error codes (today)</h4>
-        <div class="chart-note">Failed/undelivered sends by SignalWire error code. Watch for spikes on a single code — usually a carrier filter, not a bad list.</div>
+        <div class="chart-note">Failed/undelivered sends by SignalWire error code. Watch for spikes on a single code, usually a sign of a carrier filter rather than a bad list.</div>
         ${dd.carrierErrors.length ? `
           <table class="data-table">
             <thead><tr><th>Error code</th><th>Count</th></tr></thead>
@@ -1634,7 +1691,7 @@ function renderDashboard() {
     body.innerHTML = `
       <div class="chart-card">
         <h4>List fatigue / saturation, by campaign</h4>
-        <div class="chart-note">Response rate this week vs last week per campaign. A drop of 15+ points on a list with real volume last week gets flagged as fatigued — time to rotate the list or the copy.</div>
+        <div class="chart-note">Response rate this week vs last week per campaign. A drop of 15+ points on a list with real volume last week gets flagged as fatigued, meaning it's time to rotate the list or the copy.</div>
         ${lf.length ? `
           <table class="data-table">
             <thead><tr><th>Campaign</th><th>Last week</th><th>This week</th><th>Delta</th><th>Status</th></tr></thead>
@@ -1671,7 +1728,7 @@ function renderDashboard() {
       </div>
       <div class="chart-card">
         <h4>Cost per lead by list source (${label})</h4>
-        <div class="chart-note">Campaign cost divided by contacts that hit positive engagement. Lower is better — this is what tells you which list to fund next round.</div>
+        <div class="chart-note">Campaign cost divided by contacts that hit positive engagement. Lower is better, and this is what tells you which list to fund next round.</div>
         ${md.cplBySource.length ? `
           <table class="data-table">
             <thead><tr><th>Campaign</th><th>List cost</th><th>Messaging cost</th><th>Total cost</th><th>Leads</th><th>CPL</th></tr></thead>
@@ -1698,19 +1755,24 @@ function renderCampaignsView() {
   if (!wrap) return;
 
   wrap.innerHTML = `
-    <div class="chart-card">
-      <h4>New campaign / batch</h4>
-      <div class="chart-note">A campaign is a real list/round — e.g. "Cape Coral Round 1" — so cost, response rate, and list fatigue can be tracked per batch instead of lumped into one market string.</div>
-      <div class="field"><label>Name</label><input type="text" id="newCampName" placeholder="Cape Coral Round 1" /></div>
-      <div class="field"><label>Market</label><input type="text" id="newCampMarket" placeholder="Cape Coral, FL" /></div>
-      <div class="field"><label>List source</label><input type="text" id="newCampSource" placeholder="pre-foreclosure, probate, vacant high-equity..." /></div>
-      <div class="field"><label>Cost ($)</label><input type="text" id="newCampCost" placeholder="0" /></div>
-      <button class="btn primary" id="createCampBtn">Create campaign</button>
-      <div id="createCampStatus" style="font-family:var(--mono); font-size:12px; margin-top:8px;"></div>
+    <div class="dash-hero-head">
+      <div><div class="day">Campaign manager</div><h2>Lists and rounds</h2></div>
     </div>
-    <div class="chart-card">
-      <h4>Existing campaigns</h4>
-      <div id="campaignList"></div>
+    <div class="hero-grid-2" style="grid-template-columns:1fr 1.6fr; align-items:start;">
+      <div class="hero-card">
+        <div class="hero-card-head"><h3>New campaign</h3></div>
+        <div class="chart-note" style="margin-bottom:16px;">A campaign is a real list or round, for example "Cape Coral Round 1", so cost, response rate, and list fatigue can be tracked per batch instead of lumped into one market string.</div>
+        <div class="field"><label>Name</label><input type="text" id="newCampName" placeholder="Cape Coral Round 1" /></div>
+        <div class="field"><label>Market</label><input type="text" id="newCampMarket" placeholder="Cape Coral, FL" /></div>
+        <div class="field"><label>List source</label><input type="text" id="newCampSource" placeholder="pre-foreclosure, probate, vacant high-equity" /></div>
+        <div class="field"><label>Cost ($)</label><input type="text" id="newCampCost" placeholder="0" /></div>
+        <button class="btn primary" id="createCampBtn" style="width:100%;">Create campaign</button>
+        <div id="createCampStatus" style="font-size:12px; margin-top:8px;"></div>
+      </div>
+      <div class="hero-card">
+        <div class="hero-card-head"><h3>Existing campaigns</h3></div>
+        <div id="campaignList"></div>
+      </div>
     </div>
   `;
 
@@ -1743,20 +1805,26 @@ function renderCampaignList() {
   const listEl = document.getElementById('campaignList');
   if (!listEl) return;
   if (!state.campaigns.length) {
-    listEl.innerHTML = `<div class="chart-note">No campaigns yet.</div>`;
+    listEl.innerHTML = `<div class="chart-note">No campaigns yet. Create your first one on the left.</div>`;
     return;
   }
-  listEl.innerHTML = state.campaigns.map(c => `
-    <div class="campaign-item" data-id="${c.id}">
-      <div class="cname">${c.name}</div>
-      <div class="cmeta">${c.market || 'no market set'}${c.listSource ? ' · ' + c.listSource : ''} · created ${fmtTime(c.createdAt)}</div>
-      <div class="ccost-row">
-        <label style="font-family:var(--mono); font-size:11px; color:var(--text-muted);">Cost $</label>
-        <input type="text" class="camp-cost-input" value="${c.cost}" style="width:100px;" />
-        <button class="btn small update-cost-btn">Update cost</button>
+  listEl.innerHTML = state.campaigns.map(c => {
+    const swatch = (c.market || c.name || '??').slice(0, 2).toUpperCase();
+    return `
+    <div class="campaign-item" data-id="${c.id}" style="display:flex; align-items:center; gap:14px; background:var(--panel-alt); border:1px solid var(--border);">
+      <div class="hero-campaign-swatch" style="flex:0 0 auto;">${swatch}</div>
+      <div style="flex:1; min-width:0;">
+        <div class="cname">${c.name}</div>
+        <div class="cmeta">${c.market || 'no market set'}${c.listSource ? ' &middot; ' + c.listSource : ''} &middot; created ${fmtTime(c.createdAt)}</div>
+      </div>
+      <div class="ccost-row" style="margin-top:0; flex:0 0 auto;">
+        <label style="font-size:11px; color:var(--text-muted);">Cost $</label>
+        <input type="text" class="camp-cost-input" value="${c.cost}" style="width:90px;" />
+        <button class="btn small update-cost-btn">Update</button>
       </div>
     </div>
-  `).join('');
+  `;
+  }).join('');
 
   listEl.querySelectorAll('.campaign-item').forEach(item => {
     const id = item.getAttribute('data-id');
@@ -1931,9 +1999,9 @@ async function openDrawer(phone) {
           </div>`}
           <div class="row">
             <textarea id="replyBody" placeholder="Message ${leadName || phone}..."></textarea>
-            <button class="btn primary" id="sendReplyBtn">Send</button>
+            <button class="btn primary" id="sendReplyBtn" title="Send"><svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="22" y1="2" x2="11" y2="13"/><polygon points="22 2 15 22 11 13 2 9 22 2"/></svg></button>
           </div>
-          <div id="sendStatus" style="font-family:var(--mono); font-size:11px; margin-top:6px;"></div>
+          <div id="sendStatus" style="font-size:11px; margin-top:6px;"></div>
         </div>
       </div>
       <div class="lead-detail-col" id="leadDetailCol"></div>
@@ -2015,33 +2083,66 @@ async function loadLeadDetail(phone) {
   };
   const fromLocalInput = (val) => val ? new Date(val).toISOString() : '';
 
+  const fmtLastUpdate = (iso) => {
+    if (!iso) return 'N/A';
+    const d = new Date(iso);
+    if (isNaN(d)) return 'N/A';
+    return d.toLocaleDateString([], { month: 'short', day: 'numeric' }) + ' ' + d.toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' });
+  };
+  const campaignName = (() => {
+    const c = state.campaigns.find(c => String(c.id) === String(rec.campaign_id));
+    return c ? (c.market ? `${c.name} (${c.market})` : c.name) : 'None assigned';
+  })();
+
   col.innerHTML = `
-    <div class="field">
-      <label>Status</label>
-      <select id="statusSelect">
-        ${STATUSES.map(s => `<option value="${s}" ${rec.status===s?'selected':''}>${s}</option>`).join('')}
-      </select>
-    </div>
-    <div class="field">
-      <label>Campaign / batch</label>
-      <select id="campaignSelect">
-        <option value="">(none)</option>
-        ${state.campaigns.map(c => `<option value="${c.id}" ${String(rec.campaign_id)===String(c.id)?'selected':''}>${c.name}${c.market?` - ${c.market}`:''}</option>`).join('')}
-      </select>
-    </div>
-    <div class="field">
-      <label>Market / Source</label>
-      <input type="text" id="marketInput" value="${rec.market || ''}" placeholder="e.g. Cape Coral FL, Ohio SMS blast" />
-    </div>
-    <div class="field">
-      <label>Notes</label>
-      <textarea id="notesInput" placeholder="Deal notes, callback times, ARV, etc.">${rec.notes || ''}</textarea>
+    <div class="lead-detail-section">
+      <div class="lead-detail-heading">Summary</div>
+      <div class="info-list">
+        <div class="info-row">
+          <div class="lbl"><span class="ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/></svg></span>Last update</div>
+          <div class="val">${fmtLastUpdate(rec.updated_at)}</div>
+        </div>
+        <div class="info-row">
+          <div class="lbl"><span class="ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="4" width="18" height="17" rx="2"/><path d="M8 2v4M16 2v4M3 10h18"/></svg></span>Campaign</div>
+          <div class="val">${campaignName}</div>
+        </div>
+        <div class="info-row">
+          <div class="lbl"><span class="ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 1v22M17 5H9.5a3.5 3.5 0 000 7h5a3.5 3.5 0 010 7H6"/></svg></span>Deal revenue</div>
+          <div class="val">${fmtMoney(rec.revenue || 0)}</div>
+        </div>
+      </div>
     </div>
 
-    <div style="margin-top:18px; padding-top:16px; border-top:1px solid var(--border);">
+    <div class="lead-detail-section">
+      <div class="lead-detail-heading">Lead status</div>
+      <div class="field">
+        <label>Status</label>
+        <select id="statusSelect">
+          ${STATUSES.map(s => `<option value="${s}" ${rec.status===s?'selected':''}>${s}</option>`).join('')}
+        </select>
+      </div>
+      <div class="field">
+        <label>Campaign / batch</label>
+        <select id="campaignSelect">
+          <option value="">(none)</option>
+          ${state.campaigns.map(c => `<option value="${c.id}" ${String(rec.campaign_id)===String(c.id)?'selected':''}>${c.name}${c.market?` (${c.market})`:''}</option>`).join('')}
+        </select>
+      </div>
+      <div class="field">
+        <label>Market / Source</label>
+        <input type="text" id="marketInput" value="${rec.market || ''}" placeholder="e.g. Cape Coral FL, Ohio SMS blast" />
+      </div>
+      <div class="field">
+        <label>Notes</label>
+        <textarea id="notesInput" placeholder="Deal notes, callback times, ARV, etc.">${rec.notes || ''}</textarea>
+      </div>
+    </div>
+
+    <div class="lead-detail-section">
+      <div class="lead-detail-heading">Deal timeline</div>
       <div class="field" style="display:flex; align-items:center; gap:8px;">
         <input type="checkbox" id="skipBadInput" style="width:auto;" ${rec.skip_bad ? 'checked' : ''} />
-        <label style="margin:0;" for="skipBadInput">Bad skip trace (wrong number / disconnected)</label>
+        <label style="margin:0;" for="skipBadInput">Bad skip trace (wrong number, disconnected)</label>
       </div>
       <div class="field">
         <label>Positive engagement (seller dropped price)</label>
@@ -2061,7 +2162,7 @@ async function loadLeadDetail(phone) {
       </div>
     </div>
 
-    <button class="btn primary" id="saveContactBtn" style="width:100%; margin-top:6px;">Save</button>
+    <button class="btn primary" id="saveContactBtn" style="width:100%;">Save lead</button>
   `;
 
   document.getElementById('saveContactBtn').onclick = async () => {
@@ -2094,23 +2195,25 @@ function openComposeDrawer() {
   state.activePhone = null;
   drawer.classList.remove('wide');
   drawerContent.innerHTML = `
-    <h3>New message</h3>
-    <div class="sub">${state.fromNumber ? `Sending from ${state.fromNumber}` : 'No From Number set globally, enter one below'}</div>
-    <div class="field">
-      <label>To</label>
-      <input type="text" id="composeTo" placeholder="+15555550123" />
+    <div class="lead-detail-section" style="margin-bottom:18px;">
+      <div class="lead-detail-heading">New message</div>
+      <div style="color:var(--text-muted); font-size:12.5px; margin-bottom:14px;">${state.fromNumber ? `Sending from ${state.fromNumber}` : 'No From Number set globally, enter one below'}</div>
+      <div class="field">
+        <label>To</label>
+        <input type="text" id="composeTo" placeholder="+15555550123" />
+      </div>
+      <div class="field">
+        <label>Message</label>
+        <textarea id="composeBody" placeholder="Type a message..."></textarea>
+      </div>
+      ${state.fromNumber ? '' : `
+      <div class="field">
+        <label>From number</label>
+        <input type="text" id="composeFrom" placeholder="+15555550123" />
+      </div>`}
     </div>
-    <div class="field">
-      <label>Message</label>
-      <textarea id="composeBody" placeholder="Type a message..."></textarea>
-    </div>
-    ${state.fromNumber ? '' : `
-    <div class="field">
-      <label>From number</label>
-      <input type="text" id="composeFrom" placeholder="+15555550123" />
-    </div>`}
     <button class="btn primary" id="composeSendBtn" style="width:100%;">Send</button>
-    <div id="composeStatus" style="font-family:var(--mono); font-size:12px; margin-top:8px;"></div>
+    <div id="composeStatus" style="font-size:12px; margin-top:8px;"></div>
   `;
 
   const sendBtn = document.getElementById('composeSendBtn');
