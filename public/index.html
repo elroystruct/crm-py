@@ -1420,7 +1420,7 @@ function renderDashboardHero(d, a) {
 
   return `
     <div class="dash-hero-head">
-      <div><div class="day">${new Date().toLocaleDateString(undefined,{weekday:'long',year:'numeric',month:'long',day:'numeric'})}</div><h2>Welcome back, <span data-user-first>${(state.user && state.user.name) ? state.user.name.split(' ')[0] : 'there'}</span></h2></div>
+      <div style="margin:10px"><div class="day">${new Date().toLocaleDateString(undefined,{weekday:'long',year:'numeric',month:'long',day:'numeric'})}</div><h2>Welcome back, <span data-user-first>${(state.user && state.user.name) ? state.user.name.split(' ')[0] : 'there'}</span></h2></div>
     </div>
     <div class="hero-kpi-grid">
       <div class="hero-kpi-card">
@@ -1757,7 +1757,7 @@ function renderCampaignsView() {
 
   wrap.innerHTML = `
     <div class="dash-hero-head">
-      <div><div class="day">Campaign manager</div><h2>Lists and rounds</h2></div>
+      <div style="margin:10px"><div class="day">Campaign manager</div><h2>Lists and rounds</h2></div>
     </div>
     <div class="hero-grid-2" style="grid-template-columns:1fr 1.6fr; align-items:start;">
       <div class="hero-card">
